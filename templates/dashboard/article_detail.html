@@ -1,0 +1,152 @@
+{% extends "dashboard/base.html" %}
+{% block title %}{{ article.titre }} - MeetVoice{% endblock %}
+{% block page_title %}Article{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <a href="{% url 'dashboard:articles' %}" class="text-muted text-decoration-none small">
+        <i class="bi bi-arrow-left"></i> Retour aux articles
+    </a>
+    <form method="post" action="{% url 'dashboard:article_delete' article.pk %}" onsubmit="return confirm('Supprimer cet article ?')">
+        {% csrf_token %}
+        <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i> Supprimer</button>
+    </form>
+</div>
+
+<div class="row g-4">
+    <div class="col-md-8">
+        <div class="card-dark p-4 mb-4">
+            {% if article.photo %}
+            <img src="{{ article.photo }}" class="w-100 rounded mb-3" style="max-height: 300px; object-fit: cover;">
+            {% endif %}
+
+            <div class="d-flex gap-2 mb-2 flex-wrap">
+                {% if article.theme %}
+                <span class="badge rounded-pill" style="background: rgba(108,92,231,.15); color: #a29bfe;">{{ article.theme }}</span>
+                {% endif %}
+                {% if article.mis_en_avant %}
+                <span class="badge bg-warning text-dark"><i class="bi bi-star-fill"></i> Mis en avant</span>
+                {% endif %}
+                {% if article.content_type %}
+                <span class="badge bg-secondary">{{ article.content_type }}</span>
+                {% endif %}
+            </div>
+
+            <h4 class="mb-1">{{ article.titre }}</h4>
+            {% if article.sous_titre %}
+            <p class="text-muted">{{ article.sous_titre }}</p>
+            {% endif %}
+
+            {% if article.petit_description %}
+            <div class="p-3 rounded mb-3" style="background: #0f0f13; border-left: 3px solid #6c5ce7;">
+                <span class="small text-muted">Description courte:</span>
+                <p class="mb-0 small">{{ article.petit_description }}</p>
+            </div>
+            {% endif %}
+
+            {% if article.contenu %}
+            <div class="article-content mt-3">
+                {{ article.contenu|safe }}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card-dark p-4 mb-4">
+            <h6 class="mb-3">Informations</h6>
+            <table class="table table-sm table-dark-custom mb-0">
+                <tr><td class="text-muted">Auteur</td><td>{{ article.auteur_full_name|default:"-" }}</td></tr>
+                <tr><td class="text-muted">Slug</td><td class="small text-break">{{ article.slug }}</td></tr>
+                <tr><td class="text-muted">Publié le</td><td>{{ article.date_publication|date:"d/m/Y H:i"|default:"-" }}</td></tr>
+                <tr><td class="text-muted">Créé le</td><td>{{ article.created_at|date:"d/m/Y H:i"|default:"-" }}</td></tr>
+                <tr><td class="text-muted">Modifié le</td><td>{{ article.updated_at|date:"d/m/Y H:i"|default:"-" }}</td></tr>
+                <tr><td class="text-muted">Mots</td><td>{{ article.word_count|default:"-" }}</td></tr>
+                <tr><td class="text-muted">Temps de lecture</td><td>{{ article.reading_time|default:"-" }} min</td></tr>
+            </table>
+        </div>
+
+        <div class="card-dark p-4 mb-4">
+            <h6 class="mb-3">Statistiques</h6>
+            <div class="row g-2">
+                <div class="col-6">
+                    <div class="p-3 rounded text-center" style="background: #0f0f13;">
+                        <div class="fw-bold fs-5">{{ article.access_count|default:0 }}</div>
+                        <div class="small text-muted">Accès</div>
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="p-3 rounded text-center" style="background: #0f0f13;">
+                        <div class="fw-bold fs-5">{{ views_count }}</div>
+                        <div class="small text-muted">Vues uniques</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card-dark p-4 mb-4">
+            <h6 class="mb-3">SEO</h6>
+            <table class="table table-sm table-dark-custom mb-0">
+                <tr><td class="text-muted">Meta desc.</td><td class="small">{{ article.meta_description|default:"-"|truncatechars:80 }}</td></tr>
+                <tr><td class="text-muted">Focus keyword</td><td>{{ article.focus_keyword|default:"-" }}</td></tr>
+                <tr><td class="text-muted">OG Title</td><td class="small">{{ article.og_title|default:"-" }}</td></tr>
+                {% if article.canonical_url %}
+                <tr><td class="text-muted">URL</td><td class="small text-break"><a href="{{ article.canonical_url }}" target="_blank" class="text-info">{{ article.canonical_url|truncatechars:40 }}</a></td></tr>
+                {% endif %}
+            </table>
+        </div>
+
+        {% if article.tags_list %}
+        <div class="card-dark p-4 mb-4">
+            <h6 class="mb-3">Tags</h6>
+            <div class="d-flex flex-wrap gap-1">
+                {% for tag in article.tags_list %}
+                <span class="badge rounded-pill" style="background: rgba(0,206,201,.15); color: #00cec9;">{{ tag }}</span>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        {% if article.keywords %}
+        <div class="card-dark p-4 mb-4">
+            <h6 class="mb-3">Keywords</h6>
+            <div class="d-flex flex-wrap gap-1">
+                {% for kw in article.keywords %}
+                <span class="badge rounded-pill" style="background: rgba(225,112,85,.15); color: #e17055;">{{ kw }}</span>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        {% if article.youtube_video_url %}
+        <div class="card-dark p-4">
+            <h6 class="mb-3"><i class="bi bi-youtube"></i> Vidéo</h6>
+            {% if article.youtube_video_thumbnail %}
+            <img src="{{ article.youtube_video_thumbnail }}" class="w-100 rounded mb-2">
+            {% endif %}
+            <p class="small mb-1">{{ article.youtube_video_title|default:"" }}</p>
+            <a href="{{ article.youtube_video_url }}" target="_blank" class="btn btn-sm btn-outline-danger w-100 mb-2">
+                <i class="bi bi-play-circle"></i> Voir sur YouTube
+            </a>
+            <form method="post" action="{% url 'dashboard:article_remove_youtube' article.pk %}" onsubmit="return confirm('Supprimer le lien YouTube de cet article ?')">
+                {% csrf_token %}
+                <button class="btn btn-sm btn-outline-warning w-100">
+                    <i class="bi bi-x-circle"></i> Supprimer le lien YouTube
+                </button>
+            </form>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .article-content { font-size: .95rem; line-height: 1.7; }
+    .article-content h1, .article-content h2, .article-content h3 { color: #a29bfe; margin-top: 1.5rem; }
+    .article-content img { max-width: 100%; border-radius: 8px; margin: 1rem 0; }
+    .article-content a { color: #6c5ce7; }
+    .article-content p { margin-bottom: 1rem; }
+    .article-content ul, .article-content ol { padding-left: 1.5rem; }
+</style>
+{% endblock %}

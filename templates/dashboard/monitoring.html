@@ -1,0 +1,276 @@
+{% extends "dashboard/base.html" %}
+{% block title %}Monitoring - MeetVoice{% endblock %}
+{% block page_title %}Monitoring Serveurs{% endblock %}
+
+{% block extra_css %}
+<style>
+    .server-card { background: #1a1a24; border: 1px solid #2a2a35; border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; }
+    .server-card h6 { color: var(--accent-light); margin-bottom: 1rem; }
+    .metric-gauge { position: relative; width: 120px; height: 120px; margin: 0 auto; }
+    .metric-gauge canvas { width: 120px !important; height: 120px !important; }
+    .metric-gauge .gauge-value {
+        position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+        font-size: 1.2rem; font-weight: 700; color: #fff;
+    }
+    .metric-label { text-align: center; font-size: .8rem; color: #8a8a9a; margin-top: .5rem; }
+    .metric-detail { font-size: .75rem; color: #666; text-align: center; }
+    .status-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: .5rem; }
+    .status-dot.ok { background: #00d25b; box-shadow: 0 0 6px rgba(0,210,91,.4); }
+    .status-dot.err { background: #ff4169; box-shadow: 0 0 6px rgba(255,65,105,.4); }
+    .status-dot.warn { background: #ffc107; box-shadow: 0 0 6px rgba(255,193,7,.4); }
+    .mini-chart { height: 60px; margin-top: .5rem; }
+    .info-table td { padding: .3rem .5rem; font-size: .8rem; border-color: #2a2a35; }
+    .info-table .label { color: #8a8a9a; }
+    .refresh-indicator { font-size: .75rem; color: #666; }
+
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <span class="refresh-indicator"><i class="bi bi-arrow-clockwise" id="refreshIcon"></i> Temps réel (5s)</span>
+    </div>
+    <button class="btn btn-sm btn-accent" onclick="fetchAll()"><i class="bi bi-arrow-clockwise"></i> Rafraîchir</button>
+</div>
+
+{% for key, info in targets.items %}
+<div class="server-card" id="server-{{ key }}">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h6 class="mb-0">
+            <span class="status-dot" id="status-{{ key }}"></span>
+            <i class="bi bi-hdd-rack"></i> {{ info.label }}
+        </h6>
+        <span class="badge bg-secondary" id="uptime-{{ key }}">--</span>
+    </div>
+    <div class="row g-3">
+        <div class="col-md-2">
+            <div class="metric-gauge">
+                <canvas id="gauge-cpu-{{ key }}"></canvas>
+                <div class="gauge-value" id="val-cpu-{{ key }}">--</div>
+            </div>
+            <div class="metric-label">CPU</div>
+            <div class="metric-detail" id="detail-cpu-{{ key }}"></div>
+        </div>
+        <div class="col-md-2">
+            <div class="metric-gauge">
+                <canvas id="gauge-mem-{{ key }}"></canvas>
+                <div class="gauge-value" id="val-mem-{{ key }}">--</div>
+            </div>
+            <div class="metric-label">RAM</div>
+            <div class="metric-detail" id="detail-mem-{{ key }}"></div>
+        </div>
+        <div class="col-md-2">
+            <div class="metric-gauge">
+                <canvas id="gauge-disk-{{ key }}"></canvas>
+                <div class="gauge-value" id="val-disk-{{ key }}">--</div>
+            </div>
+            <div class="metric-label">Disque /</div>
+            <div class="metric-detail" id="detail-disk-{{ key }}"></div>
+        </div>
+        <div class="col-md-3">
+            <div class="p-2 rounded" style="background: #0f0f13;">
+                <div class="d-flex justify-content-between">
+                    <span class="metric-label mb-0">Réseau IN</span>
+                    <span class="metric-detail" id="val-netin-{{ key }}">--</span>
+                </div>
+                <div class="mini-chart"><canvas id="chart-netin-{{ key }}"></canvas></div>
+                <div class="d-flex justify-content-between mt-2">
+                    <span class="metric-label mb-0">Réseau OUT</span>
+                    <span class="metric-detail" id="val-netout-{{ key }}">--</span>
+                </div>
+                <div class="mini-chart"><canvas id="chart-netout-{{ key }}"></canvas></div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <table class="table table-sm info-table mb-0">
+                <tr><td class="label">Load 1m</td><td id="info-load1-{{ key }}">--</td></tr>
+                <tr><td class="label">Load 5m</td><td id="info-load5-{{ key }}">--</td></tr>
+                <tr><td class="label">Load 15m</td><td id="info-load15-{{ key }}">--</td></tr>
+                <tr><td class="label">CPUs</td><td id="info-cpus-{{ key }}">--</td></tr>
+                <tr><td class="label">RAM totale</td><td id="info-memtotal-{{ key }}">--</td></tr>
+                <tr><td class="label">Disque total</td><td id="info-disktotal-{{ key }}">--</td></tr>
+            </table>
+        </div>
+    </div>
+</div>
+{% endfor %}
+
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const SERVERS = {{ targets_json|safe }};
+const HISTORY_LEN = 30;
+const netHistory = {};
+const gaugeCharts = {};
+const netCharts = {};
+
+Object.keys(SERVERS).forEach(key => {
+    netHistory[key] = { in: [], out: [], labels: [] };
+});
+
+function getColor(val) {
+    if (val < 50) return '#00d25b';
+    if (val < 75) return '#ffc107';
+    return '#ff4169';
+}
+
+function createGauge(id) {
+    const ctx = document.getElementById(id);
+    if (!ctx) return null;
+    return new Chart(ctx.getContext('2d'), {
+        type: 'doughnut',
+        data: {
+            datasets: [{
+                data: [0, 100],
+                backgroundColor: ['#2a2a35', '#1a1a24'],
+                borderWidth: 0,
+            }]
+        },
+        options: {
+            cutout: '80%',
+            responsive: false,
+            plugins: { legend: { display: false }, tooltip: { enabled: false } },
+            rotation: -90,
+            circumference: 180,
+        }
+    });
+}
+
+function updateGauge(key, metric, value) {
+    const id = `gauge-${metric}-${key}`;
+    if (!gaugeCharts[id]) gaugeCharts[id] = createGauge(id);
+    const chart = gaugeCharts[id];
+    if (!chart) return;
+    const color = getColor(value);
+    chart.data.datasets[0].data = [value, 100 - value];
+    chart.data.datasets[0].backgroundColor = [color, '#1a1a24'];
+    chart.update('none');
+    document.getElementById(`val-${metric}-${key}`).textContent = value.toFixed(1) + '%';
+}
+
+function createNetChart(id) {
+    const ctx = document.getElementById(id);
+    if (!ctx) return null;
+    return new Chart(ctx.getContext('2d'), {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [{
+                data: [],
+                borderColor: id.includes('netin') ? '#00cec9' : '#e17055',
+                backgroundColor: id.includes('netin') ? 'rgba(0,206,201,.1)' : 'rgba(225,112,85,.1)',
+                fill: true, tension: 0.4, pointRadius: 0, borderWidth: 1.5,
+            }]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { display: false }, tooltip: { enabled: false } },
+            scales: {
+                x: { display: false },
+                y: { display: false, beginAtZero: true }
+            },
+            animation: false,
+        }
+    });
+}
+
+function formatBytes(bytes) {
+    if (bytes < 1024) return bytes.toFixed(0) + ' B/s';
+    if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB/s';
+    return (bytes / 1048576).toFixed(1) + ' MB/s';
+}
+
+function formatSize(bytes) {
+    if (bytes < 1073741824) return (bytes / 1048576).toFixed(0) + ' MB';
+    return (bytes / 1073741824).toFixed(1) + ' GB';
+}
+
+function formatUptime(seconds) {
+    const d = Math.floor(seconds / 86400);
+    const h = Math.floor((seconds % 86400) / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    if (d > 0) return d + 'j ' + h + 'h';
+    if (h > 0) return h + 'h ' + m + 'm';
+    return m + 'm';
+}
+
+function updateServer(key, data) {
+    const dot = document.getElementById(`status-${key}`);
+    if (data.error) {
+        dot.className = 'status-dot err';
+        return;
+    }
+    dot.className = 'status-dot ok';
+
+    updateGauge(key, 'cpu', data.cpu_percent);
+    updateGauge(key, 'mem', data.mem_percent);
+    updateGauge(key, 'disk', data.disk_percent);
+
+    document.getElementById(`detail-cpu-${key}`).textContent = data.cpu_count + ' cores';
+    document.getElementById(`detail-mem-${key}`).textContent = formatSize(data.mem_used) + ' / ' + formatSize(data.mem_total);
+    document.getElementById(`detail-disk-${key}`).textContent = formatSize(data.disk_used) + ' / ' + formatSize(data.disk_total);
+
+    document.getElementById(`uptime-${key}`).textContent = 'Uptime: ' + formatUptime(data.uptime);
+    document.getElementById(`info-load1-${key}`).textContent = data.load1.toFixed(2);
+    document.getElementById(`info-load5-${key}`).textContent = data.load5.toFixed(2);
+    document.getElementById(`info-load15-${key}`).textContent = data.load15.toFixed(2);
+    document.getElementById(`info-cpus-${key}`).textContent = data.cpu_count;
+    document.getElementById(`info-memtotal-${key}`).textContent = formatSize(data.mem_total);
+    document.getElementById(`info-disktotal-${key}`).textContent = formatSize(data.disk_total);
+
+    const h = netHistory[key];
+    const now = new Date().toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit', second: '2-digit'});
+    h.in.push(data.net_in_bytes);
+    h.out.push(data.net_out_bytes);
+    h.labels.push(now);
+    if (h.in.length > HISTORY_LEN) { h.in.shift(); h.out.shift(); h.labels.shift(); }
+
+    document.getElementById(`val-netin-${key}`).textContent = formatBytes(data.net_in_bytes);
+    document.getElementById(`val-netout-${key}`).textContent = formatBytes(data.net_out_bytes);
+
+    ['netin', 'netout'].forEach(dir => {
+        const chartId = `chart-${dir}-${key}`;
+        if (!netCharts[chartId]) netCharts[chartId] = createNetChart(chartId);
+        const chart = netCharts[chartId];
+        if (!chart) return;
+        chart.data.labels = h.labels;
+        chart.data.datasets[0].data = dir === 'netin' ? [...h.in] : [...h.out];
+        chart.update('none');
+    });
+}
+
+function fetchAll() {
+    document.getElementById('refreshIcon').classList.add('spin');
+    fetch("{% url 'dashboard:monitoring_api' %}")
+        .then(r => r.json())
+        .then(data => {
+            Object.keys(data).forEach(key => updateServer(key, data[key]));
+            document.getElementById('refreshIcon').classList.remove('spin');
+        })
+        .catch(() => document.getElementById('refreshIcon').classList.remove('spin'));
+}
+
+let pending = false;
+function loop() {
+    if (pending) return;
+    pending = true;
+    fetch("{% url 'dashboard:monitoring_api' %}")
+        .then(r => r.json())
+        .then(data => {
+            Object.keys(data).forEach(key => updateServer(key, data[key]));
+            pending = false;
+        })
+        .catch(() => { pending = false; });
+}
+
+loop();
+setInterval(loop, 5000);
+</script>
+<style>
+@keyframes spin { to { transform: rotate(360deg); } }
+.spin { animation: spin .5s linear infinite; }
+</style>
+{% endblock %}

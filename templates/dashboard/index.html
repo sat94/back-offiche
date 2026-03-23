@@ -1,0 +1,162 @@
+{% extends "dashboard/base.html" %}
+{% block title %}Dashboard - MeetVoice{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="row g-4 mb-4">
+    <div class="col-md-3">
+        <div class="stat-card d-flex justify-content-between align-items-center">
+            <div>
+                <div class="stat-value">{{ total_comptes }}</div>
+                <div class="stat-label">Comptes totaux</div>
+            </div>
+            <div class="stat-icon"><i class="bi bi-people"></i></div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card d-flex justify-content-between align-items-center">
+            <div>
+                <div class="stat-value">{{ new_comptes_7d }}</div>
+                <div class="stat-label">Nouveaux (7j)</div>
+            </div>
+            <div class="stat-icon"><i class="bi bi-person-plus"></i></div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card d-flex justify-content-between align-items-center">
+            <div>
+                <div class="stat-value">{{ new_comptes_30d }}</div>
+                <div class="stat-label">Nouveaux (30j)</div>
+            </div>
+            <div class="stat-icon"><i class="bi bi-graph-up-arrow"></i></div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card d-flex justify-content-between align-items-center">
+            <div>
+                <div class="stat-value">{{ deleted_comptes }}</div>
+                <div class="stat-label">Comptes supprimés</div>
+            </div>
+            <div class="stat-icon"><i class="bi bi-person-x"></i></div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4 mb-4">
+    <div class="col-md-3">
+        <div class="stat-card d-flex justify-content-between align-items-center">
+            <div>
+                <div class="stat-value">{{ verified_comptes }}</div>
+                <div class="stat-label">Verifies</div>
+            </div>
+            <div class="stat-icon"><i class="bi bi-patch-check"></i></div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card d-flex justify-content-between align-items-center">
+            <div>
+                <div class="stat-value">{{ total_likes }}</div>
+                <div class="stat-label">Likes</div>
+            </div>
+            <div class="stat-icon"><i class="bi bi-heart"></i></div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card d-flex justify-content-between align-items-center">
+            <div>
+                <div class="stat-value">{{ total_vues }}</div>
+                <div class="stat-label">Vues profil</div>
+            </div>
+            <div class="stat-icon"><i class="bi bi-eye"></i></div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card d-flex justify-content-between align-items-center">
+            <div>
+                <div class="stat-value">{{ total_photos }}</div>
+                <div class="stat-label">Photos</div>
+            </div>
+            <div class="stat-icon"><i class="bi bi-image"></i></div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4 mb-4">
+    <div class="col-md-8">
+        <div class="card-dark p-4">
+            <h6 class="mb-3">Nouveaux comptes (30 derniers jours)</h6>
+            <div style="position: relative; height: 250px;">
+                <canvas id="chartComptes"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card-dark p-4">
+            <h6 class="mb-3">Statut des bases de donnees</h6>
+            <div class="mb-3">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span><i class="bi bi-database"></i> PostgreSQL</span>
+                    {% if pg_ok %}
+                    <span class="badge-status badge-ok">Connecte</span>
+                    {% else %}
+                    <span class="badge-status badge-err">Erreur</span>
+                    {% endif %}
+                </div>
+            </div>
+            {% for key, info in mongo_status.items %}
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <span><i class="bi bi-hdd-stack"></i> Mongo: {{ key }}</span>
+                {% if info.status == 'connected' %}
+                <span class="badge-status badge-ok">Connecte</span>
+                {% else %}
+                <span class="badge-status badge-err">Erreur</span>
+                {% endif %}
+            </div>
+            {% endfor %}
+            <hr class="border-secondary">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <span><i class="bi bi-shield-x"></i> Blacklistes</span>
+                <span class="badge-status badge-warn">{{ total_blacklist }}</span>
+            </div>
+            <div class="d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-exclamation-triangle"></i> Signalements</span>
+                <span class="badge-status badge-err">{{ total_signalements }}</span>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+var labels = {{ chart_labels|safe }};
+var data = {{ chart_data|safe }};
+if (labels.length > 0) {
+    new Chart(document.getElementById('chartComptes').getContext('2d'), {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Nouveaux comptes',
+                data: data,
+                borderColor: '#6c5ce7',
+                backgroundColor: 'rgba(108, 92, 231, 0.1)',
+                fill: true, tension: 0.3, pointRadius: 4,
+                pointBackgroundColor: '#6c5ce7',
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { beginAtZero: true, grid: { color: '#2a2a35' }, ticks: { color: '#8a8a9a', stepSize: 1 } },
+                x: { grid: { display: false }, ticks: { color: '#8a8a9a' } }
+            }
+        }
+    });
+} else {
+    document.getElementById('chartComptes').parentElement.innerHTML = '<p class="text-muted text-center py-4 mb-0">Aucune donnee sur les 30 derniers jours</p>';
+}
+</script>
+{% endblock %}

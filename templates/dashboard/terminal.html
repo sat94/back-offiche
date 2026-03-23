@@ -1,0 +1,498 @@
+{% extends "dashboard/base.html" %}
+{% block title %}Terminal SSH - MeetVoice{% endblock %}
+{% block page_title %}Terminal SSH{% endblock %}
+
+{% block extra_css %}
+<style>
+    .term-layout { display: flex; gap: 1rem; height: calc(100vh - 160px); }
+    .term-sidebar { width: 220px; flex-shrink: 0; overflow-y: auto; }
+    .term-main { flex: 1; display: flex; flex-direction: column; }
+    .srv-btn {
+        display: block; width: 100%; text-align: left; padding: .6rem .8rem;
+        background: #1a1a24; border: 1px solid #2a2a35; border-radius: 8px;
+        color: #8a8a9a; font-size: .8rem; cursor: pointer; margin-bottom: .4rem;
+        transition: all .15s;
+    }
+    .srv-btn:hover { border-color: var(--accent); color: #fff; }
+    .srv-btn.connected { border-color: #00d25b; color: #00d25b; background: rgba(0,210,91,.05); }
+    .srv-btn .srv-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: .5rem; background: #444; }
+    .srv-btn.connected .srv-dot { background: #00d25b; box-shadow: 0 0 6px rgba(0,210,91,.4); }
+    .srv-btn .srv-host { font-size: .65rem; color: #666; display: block; margin-left: 1.1rem; }
+    .terminal-box {
+        flex: 1; background: #0a0a0f; border: 1px solid #2a2a35; border-radius: 12px;
+        font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+        font-size: .8rem; overflow: hidden; display: flex; flex-direction: column;
+    }
+    .term-header {
+        padding: .5rem 1rem; background: #12121a; border-bottom: 1px solid #2a2a35;
+        display: flex; justify-content: space-between; align-items: center;
+    }
+    .term-header .term-title { font-size: .75rem; color: #00d25b; }
+    .term-output {
+        flex: 1; padding: 1rem; overflow-y: auto; white-space: pre-wrap;
+        word-break: break-all; color: #c0c0c0; line-height: 1.5;
+    }
+    .term-output .cmd-line { color: #00d25b; }
+    .term-output .err-line { color: #ff4169; }
+    .term-output .ai-line { color: #a29bfe; }
+    .term-output .ai-cmd { color: #ffeaa7; }
+    .term-output .ai-explain { color: #74b9ff; font-style: italic; }
+    .term-input-area {
+        padding: .5rem 1rem; border-top: 1px solid #2a2a35; background: #0f0f15;
+        display: flex; gap: .5rem; align-items: center;
+    }
+    .term-prompt { color: #00d25b; font-size: .8rem; flex-shrink: 0; }
+    .term-prompt.ai-mode { color: #a29bfe; }
+    .term-input {
+        flex: 1; background: transparent; border: none; color: #fff;
+        font-family: inherit; font-size: .8rem; outline: none;
+    }
+    .term-input::placeholder { color: #444; }
+    .not-connected { display: flex; align-items: center; justify-content: center; flex: 1; color: #444; font-size: .9rem; }
+    .pwd-inline { display: none; gap: .5rem; align-items: center; padding: .5rem 1rem; background: #12121a; border-top: 1px solid #2a2a35; }
+    .pwd-inline.active { display: flex; }
+    .pwd-inline input { background: #0a0a0f; border: 1px solid #2a2a35; color: #e0e0e0; border-radius: 6px; font-size: .8rem; padding: .3rem .6rem; flex: 1; }
+    .pwd-inline input:focus { border-color: var(--accent); outline: none; }
+    .mode-toggle { font-size: .7rem; padding: 2px 10px; border-radius: 12px; }
+    .mode-toggle.active { background: #a29bfe; color: #fff; border-color: #a29bfe; }
+    .ai-thinking { color: #a29bfe; animation: pulse 1.5s infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .4; } }
+    .ai-actions { display: inline-flex; gap: .3rem; margin-left: .5rem; }
+    .ai-actions button { font-size: .65rem; padding: 1px 6px; border-radius: 4px; cursor: pointer; background: none; border: 1px solid; }
+    .ai-actions .btn-exec { color: #00d25b; border-color: #00d25b; }
+    .ai-actions .btn-exec:hover { background: rgba(0,210,91,.15); }
+    .ai-actions .btn-skip { color: #636e72; border-color: #636e72; }
+    .ai-actions .btn-skip:hover { background: rgba(99,110,114,.15); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="term-layout">
+    <div class="term-sidebar">
+        <div class="small text-muted mb-2"><i class="bi bi-hdd-rack"></i> Serveurs</div>
+        {% for srv in servers %}
+        <button class="srv-btn" id="srv-{{ srv.key }}" onclick="selectServer('{{ srv.key }}')">
+            <span class="srv-dot"></span>{{ srv.label }}
+            <span class="srv-host">{{ srv.user }}@{{ srv.host }}</span>
+        </button>
+        {% endfor %}
+    </div>
+
+    <div class="term-main">
+        <div class="terminal-box">
+            <div class="term-header">
+                <span class="term-title" id="term-title">Aucun serveur sélectionné</span>
+                <div class="d-flex gap-2 align-items-center">
+                    <button class="btn btn-sm mode-toggle" id="aiToggle" onclick="toggleAiMode()" title="Mode IA (Claude Sonnet)">
+                        <i class="bi bi-robot"></i> IA
+                    </button>
+                    <button class="btn btn-sm btn-outline-success" id="connectBtn" onclick="connectServer()" style="font-size: .7rem; display: none;">
+                        <i class="bi bi-plug"></i> Connecter
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger" id="disconnectBtn" onclick="disconnectServer()" style="font-size: .7rem; display: none;">
+                        <i class="bi bi-x-circle"></i> Déconnecter
+                    </button>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="clearTerminal()" style="font-size: .7rem;">
+                        <i class="bi bi-eraser"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="pwd-inline" id="pwd-area">
+                <span class="small text-muted">Mot de passe :</span>
+                <input type="password" id="pwd-field" placeholder="(optionnel, si clé SSH échoue)">
+                <button class="btn btn-sm btn-accent" onclick="doConnect()" style="font-size: .7rem;">OK</button>
+            </div>
+            <div class="term-output" id="term-output">
+                <div class="not-connected" id="no-conn-msg">
+                    <div class="text-center">
+                        <i class="bi bi-terminal" style="font-size: 3rem; display: block; margin-bottom: .5rem;"></i>
+                        Sélectionnez un serveur et connectez-vous
+                    </div>
+                </div>
+            </div>
+            <div class="term-input-area" id="input-area" style="display: none;">
+                <span class="term-prompt" id="term-prompt">$</span>
+                <input type="text" class="term-input" id="term-input" placeholder="Tapez une commande..." autofocus>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const csrfToken = '{{ csrf_token }}';
+let currentServer = null;
+let connected = false;
+let aiMode = false;
+let commandHistory = [];
+let historyIndex = -1;
+let pollInterval = null;
+let pendingAiCommands = [];
+
+function toggleAiMode() {
+    aiMode = !aiMode;
+    const btn = document.getElementById('aiToggle');
+    const prompt = document.getElementById('term-prompt');
+    const input = document.getElementById('term-input');
+    if (aiMode) {
+        btn.classList.add('active');
+        prompt.textContent = 'IA >';
+        prompt.classList.add('ai-mode');
+        input.placeholder = 'Demandez en langage naturel... (ex: "vérifie l\'espace disque")';
+        appendOutput('\n[Mode IA activé - Claude Sonnet via DeepInfra]\n', 'ai-line');
+    } else {
+        btn.classList.remove('active');
+        prompt.classList.remove('ai-mode');
+        if (connected) {
+            prompt.textContent = document.getElementById('term-title').textContent.split('(')[0].trim() + ':~$';
+        } else {
+            prompt.textContent = '$';
+        }
+        input.placeholder = 'Tapez une commande...';
+        appendOutput('\n[Mode IA désactivé]\n', 'ai-line');
+    }
+    input.focus();
+}
+
+function selectServer(key) {
+    document.querySelectorAll('.srv-btn').forEach(b => {
+        if (!b.classList.contains('connected')) b.style.borderColor = '#2a2a35';
+    });
+    const btn = document.getElementById(`srv-${key}`);
+    if (!btn.classList.contains('connected')) btn.style.borderColor = 'var(--accent)';
+
+    currentServer = key;
+    const label = btn.textContent.trim().split('\n')[0];
+    document.getElementById('term-title').textContent = label + ' (déconnecté)';
+    document.getElementById('connectBtn').style.display = 'inline-block';
+    document.getElementById('disconnectBtn').style.display = 'none';
+    document.getElementById('input-area').style.display = 'none';
+    document.getElementById('pwd-area').classList.remove('active');
+}
+
+function connectServer() {
+    if (!currentServer) return;
+    document.getElementById('pwd-area').classList.add('active');
+    document.getElementById('pwd-field').value = '';
+    document.getElementById('pwd-field').focus();
+}
+
+function doConnect() {
+    if (!currentServer) return;
+    const pwd = document.getElementById('pwd-field').value.trim();
+    const btn = document.getElementById('connectBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Connexion...';
+
+    const body = `server_key=${currentServer}` + (pwd ? `&password=${encodeURIComponent(pwd)}` : '');
+
+    fetch("{% url 'dashboard:terminal_connect' %}", {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': csrfToken},
+        body: body,
+    })
+    .then(r => r.json())
+    .then(data => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-plug"></i> Connecter';
+        document.getElementById('pwd-area').classList.remove('active');
+
+        if (data.error) {
+            appendOutput(`Erreur de connexion: ${data.error}\n`, 'err-line');
+            return;
+        }
+
+        connected = true;
+        document.getElementById(`srv-${currentServer}`).classList.add('connected');
+        document.getElementById('term-title').textContent = `${data.user}@${data.host} (${data.server})`;
+        document.getElementById('term-title').style.color = '#00d25b';
+        document.getElementById('connectBtn').style.display = 'none';
+        document.getElementById('disconnectBtn').style.display = 'inline-block';
+        document.getElementById('no-conn-msg').style.display = 'none';
+        document.getElementById('input-area').style.display = 'flex';
+
+        if (!aiMode) {
+            document.getElementById('term-prompt').textContent = `${data.user}@${data.host}:~$`;
+        }
+        document.getElementById('term-input').focus();
+
+        appendOutput(`Connecté à ${data.server} (${data.host})\n`, 'cmd-line');
+        startPolling();
+        setTimeout(() => readNewOutput(), 1000);
+    })
+    .catch(e => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-plug"></i> Connecter';
+        appendOutput(`Erreur: ${e}\n`, 'err-line');
+    });
+}
+
+function disconnectServer() {
+    if (!currentServer) return;
+    fetch("{% url 'dashboard:terminal_disconnect' %}", {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': csrfToken},
+        body: `server_key=${currentServer}`,
+    }).then(() => {
+        connected = false;
+        stopPolling();
+        document.getElementById(`srv-${currentServer}`).classList.remove('connected');
+        document.getElementById('term-title').textContent = 'Déconnecté';
+        document.getElementById('term-title').style.color = '#ff4169';
+        document.getElementById('connectBtn').style.display = 'inline-block';
+        document.getElementById('disconnectBtn').style.display = 'none';
+        document.getElementById('input-area').style.display = 'none';
+        appendOutput('\n--- Déconnecté ---\n', 'err-line');
+    });
+}
+
+function executeCommand(cmd) {
+    if (!connected || !currentServer) return;
+    if (!cmd.trim()) return;
+
+    commandHistory.push(cmd);
+    historyIndex = commandHistory.length;
+
+    if (aiMode) {
+        handleAiMessage(cmd);
+        return;
+    }
+
+    fetch("{% url 'dashboard:terminal_exec' %}", {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
+        body: JSON.stringify({server_key: currentServer, command: cmd}),
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.error) appendOutput(data.error + '\n', 'err-line');
+        else if (data.output) appendOutput(data.output);
+    })
+    .catch(e => appendOutput(`Erreur: ${e}\n`, 'err-line'));
+}
+
+function handleAiMessage(message) {
+    appendOutput(`\nVous: ${message}\n`, 'ai-line');
+    const thinkingId = 'ai-thinking-' + Date.now();
+    appendHtml(`<span id="${thinkingId}" class="ai-thinking">IA réfléchit...</span>\n`);
+
+    const input = document.getElementById('term-input');
+    input.disabled = true;
+
+    fetch("{% url 'dashboard:terminal_ai_chat' %}", {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
+        body: JSON.stringify({server_key: currentServer, message: message}),
+    })
+    .then(r => r.json())
+    .then(data => {
+        const el = document.getElementById(thinkingId);
+        if (el) el.remove();
+        input.disabled = false;
+        input.focus();
+
+        if (data.error) {
+            appendOutput(`Erreur IA: ${data.error}\n`, 'err-line');
+            return;
+        }
+
+        if (data.commands && data.commands.length > 0) {
+            if (data.explanation) {
+                appendOutput(`${data.explanation}\n`, 'ai-explain');
+            }
+            appendOutput(`\nCommandes proposées :\n`, 'ai-line');
+            data.commands.forEach((cmd, i) => {
+                appendOutput(`  ${i+1}. ${cmd}\n`, 'ai-cmd');
+            });
+
+            pendingAiCommands = data.commands;
+            const actionsId = 'ai-actions-' + Date.now();
+            appendHtml(`<span id="${actionsId}"><span class="ai-actions"><button class="btn-exec" onclick="execAiCommands('${actionsId}')">▶ Exécuter tout</button><button class="btn-skip" onclick="skipAiCommands('${actionsId}')">✕ Ignorer</button></span></span>\n`);
+        } else {
+            appendOutput(`IA: ${data.response}\n`, 'ai-line');
+        }
+    })
+    .catch(e => {
+        const el = document.getElementById(thinkingId);
+        if (el) el.remove();
+        input.disabled = false;
+        input.focus();
+        appendOutput(`Erreur: ${e}\n`, 'err-line');
+    });
+}
+
+function execAiCommands(actionsId) {
+    const el = document.getElementById(actionsId);
+    if (el) el.remove();
+
+    if (!pendingAiCommands.length) return;
+
+    const cmds = [...pendingAiCommands];
+    pendingAiCommands = [];
+    let allOutput = '';
+
+    appendOutput('\n--- Exécution ---\n', 'cmd-line');
+
+    function runNext(i) {
+        if (i >= cmds.length) {
+            appendOutput('--- Fin d\'exécution ---\n', 'cmd-line');
+            sendOutputToAi(allOutput);
+            return;
+        }
+
+        const cmd = cmds[i];
+        appendOutput(`$ ${cmd}\n`, 'cmd-line');
+
+        fetch("{% url 'dashboard:terminal_exec' %}", {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
+            body: JSON.stringify({server_key: currentServer, command: cmd}),
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.output) {
+                appendOutput(data.output);
+                allOutput += `$ ${cmd}\n${data.output}\n`;
+            }
+            if (data.error) {
+                appendOutput(data.error + '\n', 'err-line');
+                allOutput += `$ ${cmd}\nERROR: ${data.error}\n`;
+            }
+            setTimeout(() => runNext(i + 1), 300);
+        })
+        .catch(e => {
+            appendOutput(`Erreur: ${e}\n`, 'err-line');
+            setTimeout(() => runNext(i + 1), 300);
+        });
+    }
+
+    runNext(0);
+}
+
+function skipAiCommands(actionsId) {
+    const el = document.getElementById(actionsId);
+    if (el) el.remove();
+    pendingAiCommands = [];
+    appendOutput('[Commandes ignorées]\n', 'ai-line');
+}
+
+function sendOutputToAi(output) {
+    if (!output.trim()) return;
+
+    const thinkingId = 'ai-analysis-' + Date.now();
+    appendHtml(`<span id="${thinkingId}" class="ai-thinking">IA analyse les résultats...</span>\n`);
+
+    fetch("{% url 'dashboard:terminal_ai_chat' %}", {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
+        body: JSON.stringify({server_key: currentServer, message: '', command_output: output}),
+    })
+    .then(r => r.json())
+    .then(data => {
+        const el = document.getElementById(thinkingId);
+        if (el) el.remove();
+        if (data.error) {
+            appendOutput(`Erreur IA: ${data.error}\n`, 'err-line');
+            return;
+        }
+        appendOutput(`\nAnalyse IA:\n${data.response}\n`, 'ai-explain');
+    })
+    .catch(e => {
+        const el = document.getElementById(thinkingId);
+        if (el) el.remove();
+    });
+}
+
+function readNewOutput() {
+    if (!connected || !currentServer) return;
+    fetch(`{% url 'dashboard:terminal_read' %}?server_key=${currentServer}`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.output) appendOutput(data.output);
+        });
+}
+
+function startPolling() {
+    stopPolling();
+    pollInterval = setInterval(readNewOutput, 2000);
+}
+
+function stopPolling() {
+    if (pollInterval) {
+        clearInterval(pollInterval);
+        pollInterval = null;
+    }
+}
+
+function appendOutput(text, cls) {
+    const out = document.getElementById('term-output');
+    const span = document.createElement('span');
+    if (cls) span.className = cls;
+    span.textContent = text;
+    out.appendChild(span);
+    out.scrollTop = out.scrollHeight;
+}
+
+function appendHtml(html) {
+    const out = document.getElementById('term-output');
+    const div = document.createElement('span');
+    div.innerHTML = html;
+    out.appendChild(div);
+    out.scrollTop = out.scrollHeight;
+}
+
+function clearTerminal() {
+    const out = document.getElementById('term-output');
+    out.innerHTML = '';
+    if (!connected) {
+        out.innerHTML = `<div class="not-connected" id="no-conn-msg"><div class="text-center"><i class="bi bi-terminal" style="font-size: 3rem; display: block; margin-bottom: .5rem;"></i>Sélectionnez un serveur et connectez-vous</div></div>`;
+    }
+    if (currentServer) {
+        fetch("{% url 'dashboard:terminal_ai_clear' %}", {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': csrfToken},
+            body: `server_key=${currentServer}`,
+        });
+    }
+}
+
+document.getElementById('term-input').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') {
+        const cmd = this.value;
+        this.value = '';
+        executeCommand(cmd);
+    } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (historyIndex > 0) {
+            historyIndex--;
+            this.value = commandHistory[historyIndex];
+        }
+    } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (historyIndex < commandHistory.length - 1) {
+            historyIndex++;
+            this.value = commandHistory[historyIndex];
+        } else {
+            historyIndex = commandHistory.length;
+            this.value = '';
+        }
+    } else if (e.key === 'c' && e.ctrlKey) {
+        if (!aiMode) executeCommand('\x03');
+    } else if (e.key === 'Tab' && aiMode) {
+        e.preventDefault();
+        toggleAiMode();
+    }
+});
+
+document.getElementById('pwd-field').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') doConnect();
+});
+
+window.addEventListener('beforeunload', function() {
+    if (connected && currentServer) {
+        navigator.sendBeacon("{% url 'dashboard:terminal_disconnect' %}", new URLSearchParams({server_key: currentServer, csrfmiddlewaretoken: csrfToken}));
+    }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,241 @@
+{% extends "dashboard/base.html" %}
+{% block title %}Courrier - MeetVoice{% endblock %}
+{% block page_title %}Courrier (Admin@meet-voice.fr){% endblock %}
+
+{% block extra_css %}
+<style>
+    .mail-layout { display: flex; gap: 1rem; min-height: 70vh; }
+    .mail-sidebar { width: 200px; flex-shrink: 0; }
+    .mail-sidebar .folder {
+        display: block; padding: .5rem .8rem; color: #8a8a9a; text-decoration: none;
+        border-radius: 8px; font-size: .85rem; margin-bottom: 2px;
+    }
+    .mail-sidebar .folder:hover, .mail-sidebar .folder.active { background: rgba(108,92,231,.15); color: #fff; }
+    .mail-sidebar .folder i { width: 20px; text-align: center; margin-right: .5rem; }
+    .mail-list { flex: 1; }
+    .mail-row {
+        display: flex; align-items: center; gap: .8rem; padding: .7rem 1rem;
+        border-bottom: 1px solid #2a2a35; cursor: pointer; transition: background .1s;
+    }
+    .mail-row:hover { background: rgba(108,92,231,.08); }
+    .mail-row.unread { font-weight: 600; }
+    .mail-row.unread .mail-subject { color: #fff; }
+    .mail-row .mail-from { width: 180px; flex-shrink: 0; font-size: .85rem; color: #a29bfe; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .mail-row .mail-subject { flex: 1; font-size: .85rem; color: #b0b0b0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .mail-row .mail-date { width: 110px; flex-shrink: 0; font-size: .75rem; color: #666; text-align: right; }
+    .mail-row .mail-actions { width: 30px; flex-shrink: 0; }
+    .mail-row .delete-btn { background: none; border: none; color: #ff4169; font-size: .8rem; opacity: 0; cursor: pointer; }
+    .mail-row:hover .delete-btn { opacity: 1; }
+    .compose-form input, .compose-form textarea { background: #0f0f13; border: 1px solid #2a2a35; color: #e0e0e0; border-radius: 8px; }
+    .compose-form input:focus, .compose-form textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(108,92,231,.2); }
+</style>
+{% endblock %}
+
+{% block content %}
+{% if error %}
+<div class="alert alert-danger"><i class="bi bi-exclamation-triangle"></i> {{ error }}</div>
+{% endif %}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <span class="text-muted small">{{ total }} email(s) dans {{ folder }}</span>
+    <div class="d-flex gap-2">
+        <button class="btn btn-sm btn-accent" onclick="openCompose()"><i class="bi bi-pencil-square"></i> Nouveau</button>
+        <a class="btn btn-sm btn-outline-secondary" href="?folder={{ folder }}"><i class="bi bi-arrow-clockwise"></i></a>
+    </div>
+</div>
+
+<div class="mail-layout">
+    <div class="mail-sidebar">
+        {% for f in folders %}
+        <a href="?folder={{ f }}" class="folder {% if f == folder %}active{% endif %}">
+            <i class="bi bi-{% if f == 'INBOX' %}inbox{% elif 'Sent' in f %}send{% elif 'Draft' in f %}pencil{% elif 'Delete' in f or 'Trash' in f %}trash{% elif 'Junk' in f %}exclamation-triangle{% else %}folder{% endif %}"></i>
+            {{ f }}
+        </a>
+        {% endfor %}
+    </div>
+
+    <div class="mail-list">
+        <div class="card-dark">
+            {% for m in emails %}
+            <div class="mail-row {% if not m.is_read %}unread{% endif %}" onclick="readMail('{{ m.uid }}')">
+                <div class="mail-from" title="{{ m.from_email }}">{{ m.from_name }}</div>
+                <div class="mail-subject">{{ m.subject }}</div>
+                <div class="mail-date">{{ m.date }}</div>
+                <div class="mail-actions">
+                    <button class="delete-btn" onclick="event.stopPropagation(); deleteMail('{{ m.uid }}')" title="Supprimer">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </div>
+            </div>
+            {% empty %}
+            <div class="text-center text-muted py-4">Aucun email</div>
+            {% endfor %}
+        </div>
+
+        {% if total_pages > 1 %}
+        <div class="d-flex justify-content-center gap-2 mt-3">
+            {% if page > 0 %}
+            <a href="?folder={{ folder }}&page={{ page|add:"-1" }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-chevron-left"></i></a>
+            {% endif %}
+            <span class="btn btn-sm btn-secondary disabled">{{ page|add:"1" }} / {{ total_pages }}</span>
+            {% if page|add:"1" < total_pages %}
+            <a href="?folder={{ folder }}&page={{ page|add:"1" }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-chevron-right"></i></a>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="modal fade" id="mailModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content" style="background: #1a1a24; border: 1px solid #2a2a35;">
+            <div class="modal-header" style="border-color: #2a2a35;">
+                <h6 class="modal-title" id="mailModalSubject"></h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="d-flex justify-content-between mb-3">
+                    <div>
+                        <div class="small"><span class="text-muted">De:</span> <span id="mailModalFrom" style="color: var(--accent-light);"></span></div>
+                        <div class="small"><span class="text-muted">A:</span> <span id="mailModalTo"></span></div>
+                    </div>
+                    <div class="small text-muted" id="mailModalDate"></div>
+                </div>
+                <div id="mailModalAttachments" class="mb-2"></div>
+                <div style="background: #fff; border-radius: 8px; padding: 1.5rem; min-height: 200px;">
+                    <iframe id="mailModalBody" style="width: 100%; min-height: 300px; border: none; background: #fff;"></iframe>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="composeModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content" style="background: #1a1a24; border: 1px solid #2a2a35;">
+            <div class="modal-header" style="border-color: #2a2a35;">
+                <h6 class="modal-title"><i class="bi bi-pencil-square"></i> Nouveau message</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body compose-form">
+                <div class="mb-2">
+                    <input type="email" id="compose-to" class="form-control" placeholder="Destinataire">
+                </div>
+                <div class="mb-2">
+                    <input type="text" id="compose-subject" class="form-control" placeholder="Sujet">
+                </div>
+                <div class="mb-3">
+                    <textarea id="compose-body" class="form-control" rows="10" placeholder="Votre message..."></textarea>
+                </div>
+                <div class="d-flex justify-content-end gap-2">
+                    <button class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+                    <button class="btn btn-accent" onclick="sendMail()" id="composeSendBtn">
+                        <i class="bi bi-send-fill"></i> Envoyer
+                    </button>
+                </div>
+                <div id="compose-result" class="mt-2"></div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const csrfToken = '{{ csrf_token }}';
+const currentFolder = '{{ folder }}';
+
+function readMail(uid) {
+    const modal = new bootstrap.Modal(document.getElementById('mailModal'));
+    document.getElementById('mailModalSubject').textContent = 'Chargement...';
+    document.getElementById('mailModalFrom').textContent = '';
+    document.getElementById('mailModalTo').textContent = '';
+    document.getElementById('mailModalDate').textContent = '';
+    document.getElementById('mailModalAttachments').innerHTML = '';
+    const iframe = document.getElementById('mailModalBody');
+    iframe.srcdoc = '<p style="color: #999; text-align: center; padding: 2rem;">Chargement...</p>';
+    modal.show();
+
+    fetch(`/mailbox/read/${uid}/?folder=${encodeURIComponent(currentFolder)}`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.error) {
+                iframe.srcdoc = `<p style="color: red;">${data.error}</p>`;
+                return;
+            }
+            document.getElementById('mailModalSubject').textContent = data.subject;
+            document.getElementById('mailModalFrom').textContent = `${data.from_name} <${data.from_email}>`;
+            document.getElementById('mailModalTo').textContent = (data.to || []).join(', ');
+            document.getElementById('mailModalDate').textContent = data.date;
+
+            if (data.attachments && data.attachments.length) {
+                let att = data.attachments.map(a =>
+                    `<span class="badge bg-secondary me-1"><i class="bi bi-paperclip"></i> ${a.filename} (${(a.size/1024).toFixed(0)} KB)</span>`
+                ).join('');
+                document.getElementById('mailModalAttachments').innerHTML = att;
+            }
+
+            iframe.srcdoc = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:'Segoe UI',sans-serif;font-size:14px;color:#333;padding:0;margin:0;}</style></head><body>${data.body}</body></html>`;
+            iframe.onload = function() {
+                this.style.height = this.contentWindow.document.body.scrollHeight + 20 + 'px';
+            };
+        })
+        .catch(e => {
+            iframe.srcdoc = `<p style="color: red;">Erreur: ${e}</p>`;
+        });
+}
+
+function deleteMail(uid) {
+    if (!confirm('Supprimer cet email ?')) return;
+    fetch(`/mailbox/delete/${uid}/`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': csrfToken},
+        body: `folder=${encodeURIComponent(currentFolder)}`,
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.ok) location.reload();
+        else alert('Erreur: ' + (data.error || 'Inconnue'));
+    });
+}
+
+function openCompose() {
+    document.getElementById('compose-to').value = '';
+    document.getElementById('compose-subject').value = '';
+    document.getElementById('compose-body').value = '';
+    document.getElementById('compose-result').innerHTML = '';
+    new bootstrap.Modal(document.getElementById('composeModal')).show();
+}
+
+function sendMail() {
+    const to = document.getElementById('compose-to').value.trim();
+    const subject = document.getElementById('compose-subject').value.trim();
+    const body = document.getElementById('compose-body').value;
+
+    if (!to || !subject) { alert('Destinataire et sujet requis'); return; }
+
+    const btn = document.getElementById('composeSendBtn');
+    btn.disabled = true;
+
+    fetch("{% url 'dashboard:mailbox_send' %}", {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': csrfToken},
+        body: `to=${encodeURIComponent(to)}&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`,
+    })
+    .then(r => r.json())
+    .then(data => {
+        btn.disabled = false;
+        if (data.ok) {
+            document.getElementById('compose-result').innerHTML = '<div class="alert alert-success small"><i class="bi bi-check-circle"></i> Email envoye !</div>';
+            setTimeout(() => bootstrap.Modal.getInstance(document.getElementById('composeModal')).hide(), 1500);
+        } else {
+            document.getElementById('compose-result').innerHTML = `<div class="alert alert-danger small">${data.error}</div>`;
+        }
+    })
+    .catch(e => {
+        btn.disabled = false;
+        document.getElementById('compose-result').innerHTML = `<div class="alert alert-danger small">Erreur: ${e}</div>`;
+    });
+}
+</script>
+{% endblock %}

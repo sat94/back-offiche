@@ -1,0 +1,334 @@
+{% extends "dashboard/base.html" %}
+{% block title %}Paiements Mollie - MeetVoice{% endblock %}
+{% block page_title %}Paiements Mollie{% endblock %}
+
+{% block extra_css %}
+<style>
+    .mollie-tabs .nav-link { color: #8a8a9a; border: none; padding: .6rem 1.2rem; border-radius: 8px; font-size: .85rem; }
+    .mollie-tabs .nav-link.active { background: var(--accent); color: #fff; }
+    .mollie-tabs .nav-link:hover:not(.active) { color: #fff; background: rgba(108,92,231,.15); }
+    .stat-mini { background: #1a1a24; border: 1px solid #2a2a35; border-radius: 12px; padding: 1.2rem; text-align: center; }
+    .stat-mini .value { font-size: 1.8rem; font-weight: 700; color: #fff; }
+    .stat-mini .label { font-size: .75rem; color: #8a8a9a; margin-top: .3rem; }
+    .status-badge { font-size: .7rem; font-weight: 600; text-transform: uppercase; padding: 2px 8px; border-radius: 4px; }
+    .status-paid { background: rgba(0,210,91,.15); color: #00d25b; }
+    .status-open, .status-pending { background: rgba(255,193,7,.15); color: #ffc107; }
+    .status-failed, .status-expired, .status-canceled { background: rgba(255,65,105,.15); color: #ff4169; }
+    .status-active { background: rgba(0,210,91,.15); color: #00d25b; }
+    .status-suspended { background: rgba(255,193,7,.15); color: #ffc107; }
+    .customer-link { color: var(--accent-light); cursor: pointer; text-decoration: none; }
+    .customer-link:hover { text-decoration: underline; }
+</style>
+{% endblock %}
+
+{% block content %}
+{% if error %}
+<div class="alert alert-danger"><i class="bi bi-exclamation-triangle"></i> {{ error }}</div>
+{% endif %}
+
+<div class="row g-3 mb-4">
+    <div class="col-md-3 col-6">
+        <div class="stat-mini">
+            <div class="value">{{ stats.total_paid|floatformat:2|default:"0.00" }} <small style="font-size: .7rem;">€</small></div>
+            <div class="label"><i class="bi bi-cash-stack"></i> Revenus totaux</div>
+        </div>
+    </div>
+    <div class="col-md-3 col-6">
+        <div class="stat-mini">
+            <div class="value">{{ stats.paid_count|default:"0" }}</div>
+            <div class="label"><i class="bi bi-check-circle"></i> Paiements réussis</div>
+        </div>
+    </div>
+    <div class="col-md-3 col-6">
+        <div class="stat-mini">
+            <div class="value">{{ stats.total_customers|default:"0" }}</div>
+            <div class="label"><i class="bi bi-people"></i> Clients</div>
+        </div>
+    </div>
+    <div class="col-md-3 col-6">
+        <div class="stat-mini">
+            <div class="value">{{ stats.active_subscriptions|default:"0" }}</div>
+            <div class="label"><i class="bi bi-arrow-repeat"></i> Abonnements actifs</div>
+        </div>
+    </div>
+</div>
+
+<ul class="nav mollie-tabs mb-4">
+    <li class="nav-item">
+        <a class="nav-link {% if tab == 'overview' %}active{% endif %}" href="?tab=overview">
+            <i class="bi bi-grid"></i> Vue d'ensemble
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link {% if tab == 'payments' %}active{% endif %}" href="?tab=payments">
+            <i class="bi bi-credit-card"></i> Paiements ({{ stats.total_payments|default:"0" }})
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link {% if tab == 'customers' %}active{% endif %}" href="?tab=customers">
+            <i class="bi bi-people"></i> Clients ({{ stats.total_customers|default:"0" }})
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link {% if tab == 'subscriptions' %}active{% endif %}" href="?tab=subscriptions">
+            <i class="bi bi-arrow-repeat"></i> Abonnements ({{ stats.total_subscriptions|default:"0" }})
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link {% if tab == 'refunds' %}active{% endif %}" href="?tab=refunds">
+            <i class="bi bi-arrow-counterclockwise"></i> Remboursements
+        </a>
+    </li>
+</ul>
+
+{% if tab == 'overview' or tab == 'payments' %}
+<div class="card-dark p-4 mb-4">
+    <h6 class="mb-3"><i class="bi bi-credit-card"></i> Derniers paiements</h6>
+    <div class="table-responsive">
+        <table class="table table-dark-custom table-hover align-middle">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Montant</th>
+                    <th>Statut</th>
+                    <th>Description</th>
+                    <th>Méthode</th>
+                    <th>Date</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in payments %}
+                <tr>
+                    <td class="small text-muted">{{ p.id }}</td>
+                    <td class="fw-semibold">{{ p.amount.value }} {{ p.amount.currency }}</td>
+                    <td><span class="status-badge status-{{ p.status }}">{{ p.status }}</span></td>
+                    <td class="small">{{ p.description|truncatechars:50 }}</td>
+                    <td class="small">{{ p.method|default:"-" }}</td>
+                    <td class="small text-muted">{{ p.created_at|truncatechars:19 }}</td>
+                    <td>
+                        {% if p.status == 'paid' %}
+                        <button class="btn btn-sm btn-outline-warning" onclick="refundPayment('{{ p.id }}')">
+                            <i class="bi bi-arrow-counterclockwise"></i>
+                        </button>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="7" class="text-center text-muted py-3">Aucun paiement</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+{% if tab == 'overview' or tab == 'customers' %}
+<div class="card-dark p-4 mb-4">
+    <h6 class="mb-3"><i class="bi bi-people"></i> Clients</h6>
+    <div class="table-responsive">
+        <table class="table table-dark-custom table-hover align-middle">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Nom</th>
+                    <th>Email</th>
+                    <th>Créé le</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for c in customers %}
+                <tr>
+                    <td class="small text-muted">{{ c.id }}</td>
+                    <td class="fw-semibold">{{ c.name }}</td>
+                    <td>{{ c.email }}</td>
+                    <td class="small text-muted">{{ c.created_at|truncatechars:19 }}</td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-info" onclick="showCustomer('{{ c.id }}')">
+                            <i class="bi bi-eye"></i> Détails
+                        </button>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="5" class="text-center text-muted py-3">Aucun client</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+{% if tab == 'overview' or tab == 'subscriptions' %}
+<div class="card-dark p-4 mb-4">
+    <h6 class="mb-3"><i class="bi bi-arrow-repeat"></i> Abonnements</h6>
+    <div class="table-responsive">
+        <table class="table table-dark-custom table-hover align-middle">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Client</th>
+                    <th>Montant</th>
+                    <th>Intervalle</th>
+                    <th>Statut</th>
+                    <th>Prochain paiement</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for s in subscriptions %}
+                <tr>
+                    <td class="small text-muted">{{ s.id }}</td>
+                    <td>
+                        <span class="customer-link" onclick="showCustomer('{{ s.customer_id }}')">{{ s.customer_name }}</span>
+                        <div class="small text-muted">{{ s.customer_email }}</div>
+                    </td>
+                    <td class="fw-semibold">{{ s.amount.value }} {{ s.amount.currency }}</td>
+                    <td class="small">{{ s.interval }}</td>
+                    <td><span class="status-badge status-{{ s.status }}">{{ s.status }}</span></td>
+                    <td class="small">{{ s.next_payment_date|default:"-" }}</td>
+                    <td>
+                        {% if s.status == 'active' %}
+                        <button class="btn btn-sm btn-outline-danger" onclick="cancelSub('{{ s.customer_id }}', '{{ s.id }}')">
+                            <i class="bi bi-x-circle"></i> Annuler
+                        </button>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="7" class="text-center text-muted py-3">Aucun abonnement</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+{% if tab == 'refunds' %}
+<div class="card-dark p-4 mb-4">
+    <h6 class="mb-3"><i class="bi bi-arrow-counterclockwise"></i> Remboursements</h6>
+    <div class="table-responsive">
+        <table class="table table-dark-custom table-hover align-middle">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Paiement</th>
+                    <th>Montant</th>
+                    <th>Statut</th>
+                    <th>Date</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in refunds %}
+                <tr>
+                    <td class="small text-muted">{{ r.id }}</td>
+                    <td class="small">{{ r.payment_id }}</td>
+                    <td class="fw-semibold">{{ r.amount.value }} {{ r.amount.currency }}</td>
+                    <td><span class="status-badge status-{{ r.status }}">{{ r.status }}</span></td>
+                    <td class="small text-muted">{{ r.created_at|truncatechars:19 }}</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="5" class="text-center text-muted py-3">Aucun remboursement</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+<div class="modal fade" id="customerModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content" style="background: #1a1a24; border: 1px solid #2a2a35;">
+            <div class="modal-header" style="border-color: #2a2a35;">
+                <h5 class="modal-title"><i class="bi bi-person-circle"></i> <span id="custModalName"></span></h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="custModalBody">
+                <div class="text-center py-3"><i class="bi bi-hourglass-split"></i> Chargement...</div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const csrfToken = '{{ csrf_token }}';
+
+function refundPayment(paymentId) {
+    if (!confirm('Rembourser intégralement ce paiement ?')) return;
+    fetch("{% url 'dashboard:mollie_refund' %}", {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': csrfToken},
+        body: `payment_id=${paymentId}`,
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.error) alert('Erreur: ' + data.error);
+        else location.reload();
+    })
+    .catch(e => alert('Erreur: ' + e));
+}
+
+function cancelSub(customerId, subId) {
+    if (!confirm('Annuler cet abonnement ?')) return;
+    fetch("{% url 'dashboard:mollie_cancel_subscription' %}", {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': csrfToken},
+        body: `customer_id=${customerId}&subscription_id=${subId}`,
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.error) alert('Erreur: ' + data.error);
+        else location.reload();
+    })
+    .catch(e => alert('Erreur: ' + e));
+}
+
+function showCustomer(custId) {
+    const modal = new bootstrap.Modal(document.getElementById('customerModal'));
+    document.getElementById('custModalName').textContent = custId;
+    document.getElementById('custModalBody').innerHTML = '<div class="text-center py-3"><i class="bi bi-hourglass-split"></i> Chargement...</div>';
+    modal.show();
+
+    fetch(`/plans/customer/${custId}/`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.error) {
+                document.getElementById('custModalBody').innerHTML = `<div class="alert alert-danger">${data.error}</div>`;
+                return;
+            }
+            document.getElementById('custModalName').textContent = data.name || data.id;
+            let html = `
+                <div class="mb-3">
+                    <span class="text-muted">Email:</span> ${data.email || '-'}<br>
+                    <span class="text-muted">Créé:</span> ${data.created_at || '-'}
+                </div>
+                <h6><i class="bi bi-credit-card"></i> Paiements (${data.payments.length})</h6>`;
+            if (data.payments.length) {
+                html += '<table class="table table-sm table-dark-custom"><thead><tr><th>ID</th><th>Montant</th><th>Statut</th><th>Date</th></tr></thead><tbody>';
+                data.payments.forEach(p => {
+                    html += `<tr><td class="small">${p.id}</td><td>${p.amount.value} ${p.amount.currency}</td><td><span class="status-badge status-${p.status}">${p.status}</span></td><td class="small">${(p.created_at||'').substring(0,19)}</td></tr>`;
+                });
+                html += '</tbody></table>';
+            } else {
+                html += '<p class="text-muted small">Aucun paiement</p>';
+            }
+            html += `<h6 class="mt-3"><i class="bi bi-arrow-repeat"></i> Abonnements (${data.subscriptions.length})</h6>`;
+            if (data.subscriptions.length) {
+                html += '<table class="table table-sm table-dark-custom"><thead><tr><th>ID</th><th>Montant</th><th>Intervalle</th><th>Statut</th></tr></thead><tbody>';
+                data.subscriptions.forEach(s => {
+                    html += `<tr><td class="small">${s.id}</td><td>${s.amount.value} ${s.amount.currency}</td><td>${s.interval}</td><td><span class="status-badge status-${s.status}">${s.status}</span></td></tr>`;
+                });
+                html += '</tbody></table>';
+            } else {
+                html += '<p class="text-muted small">Aucun abonnement</p>';
+            }
+            document.getElementById('custModalBody').innerHTML = html;
+        })
+        .catch(e => {
+            document.getElementById('custModalBody').innerHTML = `<div class="alert alert-danger">${e}</div>`;
+        });
+}
+</script>
+{% endblock %}

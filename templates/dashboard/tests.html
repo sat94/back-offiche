@@ -1,0 +1,83 @@
+{% extends "dashboard/base.html" %}
+{% block title %}Tests - MeetVoice{% endblock %}
+{% block page_title %}Tests unitaires{% endblock %}
+
+{% block content %}
+<div class="card-dark p-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h6 class="mb-1">Lancer tous les tests</h6>
+            <p class="text-muted small mb-0">Tests de connexion PostgreSQL et MongoDB</p>
+        </div>
+        <button id="runBtn" class="btn btn-accent" onclick="runTests()">
+            <i class="bi bi-play-fill"></i> Lancer les tests
+        </button>
+    </div>
+
+    <div id="testStatus" class="mb-3" style="display: none;">
+        <div class="d-flex align-items-center gap-2">
+            <div class="spinner-border spinner-border-sm text-info" role="status" id="spinner"></div>
+            <span id="statusText">Exécution en cours...</span>
+        </div>
+    </div>
+
+    <div id="testResult" style="display: none;">
+        <div class="d-flex align-items-center gap-2 mb-2">
+            <i class="bi" id="resultIcon"></i>
+            <span id="resultText" class="fw-semibold"></span>
+        </div>
+    </div>
+
+    <pre id="testOutput" class="p-3 rounded" style="background: #0f0f13; color: #b0b0b0; font-size: .8rem; max-height: 500px; overflow-y: auto; display: none;"></pre>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function runTests() {
+    const btn = document.getElementById('runBtn');
+    const status = document.getElementById('testStatus');
+    const spinner = document.getElementById('spinner');
+    const output = document.getElementById('testOutput');
+    const result = document.getElementById('testResult');
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> En cours...';
+    status.style.display = 'block';
+    result.style.display = 'none';
+    output.style.display = 'none';
+
+    fetch('{% url "dashboard:run_tests_api" %}')
+        .then(r => r.json())
+        .then(data => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-play-fill"></i> Relancer';
+            spinner.style.display = 'none';
+
+            output.textContent = data.output;
+            output.style.display = 'block';
+            result.style.display = 'block';
+
+            const icon = document.getElementById('resultIcon');
+            const text = document.getElementById('resultText');
+            if (data.returncode === 0) {
+                icon.className = 'bi bi-check-circle-fill text-success';
+                text.textContent = 'Tous les tests passent';
+                text.className = 'fw-semibold text-success';
+                document.getElementById('statusText').textContent = 'Terminé avec succès';
+            } else {
+                icon.className = 'bi bi-x-circle-fill text-danger';
+                text.textContent = 'Certains tests ont échoué';
+                text.className = 'fw-semibold text-danger';
+                document.getElementById('statusText').textContent = 'Terminé avec erreurs';
+            }
+        })
+        .catch(err => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-play-fill"></i> Relancer';
+            output.textContent = 'Erreur: ' + err;
+            output.style.display = 'block';
+        });
+}
+</script>
+{% endblock %}

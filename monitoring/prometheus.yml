@@ -1,0 +1,25 @@
+global:
+  evaluation_interval: 15s
+  scrape_interval: 15s
+scrape_configs:
+- job_name: pg
+  scrape_interval: 15s
+  static_configs:
+  - labels:
+      server: PostgreSQL (81.17.103.146)
+    targets:
+    - host.docker.internal:58878
+- job_name: mongo_gw
+  scrape_interval: 15s
+  static_configs:
+  - labels:
+      server: MongoDB Gateway (164.68.109.146)
+    targets:
+    - host.docker.internal:58880
+- job_name: mongo_api
+  scrape_interval: 15s
+  static_configs:
+  - labels:
+      server: MongoDB API (164.68.115.49)
+    targets:
+    - host.docker.internal:58882

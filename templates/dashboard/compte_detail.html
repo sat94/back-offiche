@@ -1,0 +1,173 @@
+{% extends "dashboard/base.html" %}
+{% block title %}{{ compte.username }} - MeetVoice{% endblock %}
+{% block page_title %}Profil: {{ compte.username }}{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+    <div class="col-md-4">
+        <div class="card-dark p-4 text-center">
+            {% if compte.avatar %}
+            <img src="{{ compte.avatar }}" class="rounded-circle mb-3" style="width: 120px; height: 120px; object-fit: cover;">
+            {% else %}
+            <div class="rounded-circle mx-auto mb-3 d-flex align-items-center justify-content-center" style="width: 120px; height: 120px; background: #2a2a35;">
+                <i class="bi bi-person" style="font-size: 3rem; color: #6c5ce7;"></i>
+            </div>
+            {% endif %}
+            <h5>{{ compte.prenom }} {{ compte.nom }}</h5>
+            <p class="text-muted mb-1">@{{ compte.username }}</p>
+            <p class="small text-muted">{{ compte.email }}</p>
+
+            <div class="d-flex justify-content-center gap-2 mb-3">
+                <span class="badge {% if compte.is_verified %}bg-success{% else %}bg-secondary{% endif %}">
+                    {% if compte.is_verified %}Vérifié{% else %}Non vérifié{% endif %}
+                </span>
+                <span class="badge {% if compte.is_active %}bg-success{% else %}bg-danger{% endif %}">
+                    {% if compte.is_active %}Actif{% else %}Inactif{% endif %}
+                </span>
+                <span class="badge {% if compte.is_online %}bg-success{% else %}bg-secondary{% endif %}">
+                    {% if compte.is_online %}En ligne{% else %}Hors ligne{% endif %}
+                </span>
+            </div>
+
+            <div class="row text-center g-2 mb-3">
+                <div class="col-6">
+                    <div class="p-2 rounded" style="background: #0f0f13;">
+                        <div class="fw-bold">{{ likes_received }}</div>
+                        <div class="small text-muted">Likes reçus</div>
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="p-2 rounded" style="background: #0f0f13;">
+                        <div class="fw-bold">{{ likes_given }}</div>
+                        <div class="small text-muted">Likes donnes</div>
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="p-2 rounded" style="background: #0f0f13;">
+                        <div class="fw-bold">{{ views_received }}</div>
+                        <div class="small text-muted">Vues profil</div>
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="p-2 rounded" style="background: #0f0f13;">
+                        <div class="fw-bold">{{ blacklisted_by }}</div>
+                        <div class="small text-muted">Blacklisté par</div>
+                    </div>
+                </div>
+            </div>
+
+            <hr class="border-secondary">
+            <h6 class="mb-2">Actions rapides</h6>
+            <div class="d-grid gap-2">
+                <button class="btn btn-sm btn-outline-success toggle-btn" data-field="is_verified">
+                    <i class="bi bi-patch-check"></i> {% if compte.is_verified %}Retirer vérification{% else %}Vérifier{% endif %}
+                </button>
+                <button class="btn btn-sm btn-outline-warning toggle-btn" data-field="is_active">
+                    <i class="bi bi-power"></i> {% if compte.is_active %}Désactiver{% else %}Activer{% endif %}
+                </button>
+                <button class="btn btn-sm btn-outline-info toggle-btn" data-field="ghost">
+                    <i class="bi bi-eye-slash"></i> {% if compte.ghost %}Retirer ghost{% else %}Ghost{% endif %}
+                </button>
+                <form method="post" action="{% url 'dashboard:compte_delete' compte.pk %}" onsubmit="return confirm('Supprimer ce compte ?')">
+                    {% csrf_token %}
+                    <button class="btn btn-sm btn-outline-danger w-100"><i class="bi bi-trash"></i> Supprimer</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-8">
+        <div class="card-dark p-4 mb-4">
+            <h6 class="mb-3">Informations</h6>
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <table class="table table-sm table-dark-custom mb-0">
+                        <tr><td class="text-muted">Sexe</td><td>{{ compte.sexe|default:"-" }}</td></tr>
+                        <tr><td class="text-muted">Date de naissance</td><td>{{ compte.date_de_naissance|default:"-" }}</td></tr>
+                        <tr><td class="text-muted">Ville</td><td>{{ compte.ville|default:"-" }}</td></tr>
+                        <tr><td class="text-muted">Pays</td><td>{{ compte.pays|default:"-" }}</td></tr>
+                        <tr><td class="text-muted">Téléphone</td><td>{{ compte.numberPhone|default:"-" }}</td></tr>
+                        <tr><td class="text-muted">Situation</td><td>{{ compte.situation|default:"-" }}</td></tr>
+                        <tr><td class="text-muted">Métier</td><td>{{ compte.metier|default:"-" }}</td></tr>
+                    </table>
+                </div>
+                <div class="col-md-6">
+                    <table class="table table-sm table-dark-custom mb-0">
+                        <tr><td class="text-muted">Abonnement</td><td><span class="badge bg-secondary">{{ compte.abonnement|default:"gratuit" }}</span></td></tr>
+                        <tr><td class="text-muted">Crédits</td><td>{{ compte.credit|default:0 }}</td></tr>
+                        <tr><td class="text-muted">Recherche</td><td>{{ compte.recherche|default:"-" }}</td></tr>
+                        <tr><td class="text-muted">Inscrit le</td><td>{{ compte.created_at|date:"d/m/Y H:i" }}</td></tr>
+                        <tr><td class="text-muted">Dernière connexion</td><td>{{ compte.last_login|date:"d/m/Y H:i"|default:"-" }}</td></tr>
+                        <tr><td class="text-muted">CGU</td><td>{% if compte.cgu %}<i class="bi bi-check text-success"></i>{% else %}<i class="bi bi-x text-danger"></i>{% endif %}</td></tr>
+                        <tr><td class="text-muted">Admin</td><td>{% if compte.is_admin %}<i class="bi bi-check text-success"></i>{% else %}<i class="bi bi-x text-danger"></i>{% endif %}</td></tr>
+                    </table>
+                </div>
+            </div>
+            {% if compte.bio %}
+            <div class="mt-3">
+                <span class="text-muted small">Bio:</span>
+                <p class="mb-0">{{ compte.bio }}</p>
+            </div>
+            {% endif %}
+        </div>
+
+        {% if photos %}
+        <div class="card-dark p-4 mb-4">
+            <h6 class="mb-3">Photos ({{ photos|length }})</h6>
+            <div class="d-flex flex-wrap gap-2">
+                {% for photo in photos %}
+                <div class="position-relative">
+                    {% if photo.photos %}
+                    <img src="{{ photo.photos }}" style="width: 100px; height: 100px; object-fit: cover; border-radius: 8px;">
+                    {% endif %}
+                    {% if photo.is_nsfw %}
+                    <span class="position-absolute top-0 end-0 badge bg-danger" style="font-size: .6rem;">NSFW</span>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="card-dark p-4">
+            <h6 class="mb-3"><i class="bi bi-tags"></i> Profil - Relations</h6>
+            <div class="row g-3">
+                {% for m2m in m2m_data %}
+                <div class="col-md-6">
+                    <div class="p-3 rounded" style="background: #0f0f13; border-left: 3px solid {{ m2m.color }};">
+                        <div class="d-flex align-items-center gap-2 mb-2">
+                            <i class="bi {{ m2m.icon }}" style="color: {{ m2m.color }};"></i>
+                            <span class="fw-semibold small">{{ m2m.label }}</span>
+                            <span class="badge bg-secondary ms-auto" style="font-size: .65rem;">{{ m2m.items|length }}</span>
+                        </div>
+                        <div class="d-flex flex-wrap gap-1">
+                            {% for item in m2m.items %}
+                            <span class="badge rounded-pill" style="background: {{ m2m.color }}22; color: {{ m2m.color }}; border: 1px solid {{ m2m.color }}44; font-size: .75rem;">{{ item }}</span>
+                            {% empty %}
+                            <span class="text-muted small fst-italic">Aucun</span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.querySelectorAll('.toggle-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+        const field = this.dataset.field;
+        fetch(`{% url 'dashboard:compte_toggle' compte.pk 'FIELD' %}`.replace('FIELD', field), {
+            method: 'POST',
+            headers: {'X-CSRFToken': '{{ csrf_token }}', 'Content-Type': 'application/json'},
+        })
+        .then(r => r.json())
+        .then(() => location.reload());
+    });
+});
+</script>
+{% endblock %}

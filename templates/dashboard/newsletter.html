@@ -1,0 +1,294 @@
+{% extends "dashboard/base.html" %}
+{% block title %}Newsletter - MeetVoice{% endblock %}
+{% block page_title %}Newsletter{% endblock %}
+
+{% block extra_css %}
+<style>
+    .nl-editor { background: #1a1a24; border: 1px solid #2a2a35; border-radius: 12px; padding: 1.5rem; }
+    .nl-preview { background: #fff; color: #333; border-radius: 8px; padding: 1.5rem; min-height: 300px; }
+    .nl-preview img { max-width: 100%; border-radius: 8px; }
+    .img-gallery { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: 1rem; }
+    .img-gallery .gen-img {
+        width: 150px; height: 100px; object-fit: cover; border-radius: 8px;
+        border: 2px solid transparent; cursor: pointer; transition: border-color .15s;
+    }
+    .img-gallery .gen-img:hover, .img-gallery .gen-img.selected { border-color: var(--accent); }
+    .prompt-input { background: #0f0f13; border: 1px solid #2a2a35; color: #e0e0e0; border-radius: 8px; }
+    .prompt-input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(108,92,231,.2); }
+    .sending-progress { display: none; }
+    .sending-progress.active { display: block; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+    <div class="col-lg-6">
+        <div class="nl-editor">
+            <h6 class="mb-3"><i class="bi bi-pencil-square"></i> Composer la newsletter</h6>
+
+            <div class="mb-3">
+                <label class="form-label small text-muted">Sujet</label>
+                <input type="text" id="nl-subject" class="form-control prompt-input" placeholder="Sujet de la newsletter">
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label small text-muted">Titre</label>
+                <input type="text" id="nl-title" class="form-control prompt-input" placeholder="Titre principal">
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label small text-muted">Contenu (HTML ou texte)</label>
+                <textarea id="nl-content" class="form-control prompt-input" rows="8" placeholder="Ecrivez le contenu de votre newsletter..."></textarea>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label small text-muted">Bouton CTA (optionnel)</label>
+                <div class="row g-2">
+                    <div class="col-7">
+                        <input type="text" id="nl-cta-text" class="form-control prompt-input" placeholder="Texte du bouton">
+                    </div>
+                    <div class="col-5">
+                        <input type="text" id="nl-cta-url" class="form-control prompt-input" placeholder="URL">
+                    </div>
+                </div>
+            </div>
+
+            <hr style="border-color: #2a2a35;">
+
+            <h6 class="mb-3"><i class="bi bi-image"></i> Generer une image avec Flux</h6>
+            <div class="input-group mb-2">
+                <input type="text" id="img-prompt" class="form-control prompt-input" placeholder="Decrivez l'image souhaitee...">
+                <button class="btn btn-accent" onclick="generateImage()" id="genBtn">
+                    <i class="bi bi-magic"></i> Generer
+                </button>
+            </div>
+            <div id="gen-loading" class="text-muted small d-none"><i class="bi bi-hourglass-split"></i> Generation en cours...</div>
+            <div id="gen-error" class="text-danger small d-none"></div>
+            <div class="img-gallery" id="img-gallery"></div>
+        </div>
+
+        <div class="nl-editor mt-3">
+            <h6 class="mb-3"><i class="bi bi-people"></i> Destinataires</h6>
+            <div class="mb-2">
+                <button class="btn btn-sm btn-outline-info" onclick="loadRecipients()">
+                    <i class="bi bi-arrow-clockwise"></i> Charger la liste
+                </button>
+                <span id="recipient-count" class="ms-2 small text-muted"></span>
+            </div>
+            <div id="recipient-sample" class="small text-muted"></div>
+            <div class="mt-2">
+                <label class="form-label small text-muted">Ou saisir des emails (1 par ligne)</label>
+                <textarea id="nl-custom-emails" class="form-control prompt-input" rows="3" placeholder="email1@example.com&#10;email2@example.com"></textarea>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <div class="nl-editor">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h6 class="mb-0"><i class="bi bi-eye"></i> Apercu</h6>
+                <button class="btn btn-sm btn-accent" onclick="updatePreview()"><i class="bi bi-arrow-clockwise"></i> Rafraichir</button>
+            </div>
+            <div class="nl-preview" id="nl-preview">
+                <p style="color: #999; text-align: center; padding: 3rem 0;">L'apercu apparaitra ici</p>
+            </div>
+        </div>
+
+        <div class="nl-editor mt-3">
+            <div class="d-flex justify-content-between align-items-center">
+                <h6 class="mb-0"><i class="bi bi-send"></i> Envoi</h6>
+                <button class="btn btn-accent" onclick="sendNewsletter()" id="sendBtn">
+                    <i class="bi bi-send-fill"></i> Envoyer la newsletter
+                </button>
+            </div>
+            <div class="sending-progress mt-3" id="send-progress">
+                <div class="progress" style="height: 6px;">
+                    <div class="progress-bar bg-success" id="send-bar" style="width: 0%;"></div>
+                </div>
+                <div class="small text-muted mt-1" id="send-status"></div>
+            </div>
+            <div id="send-result" class="mt-2"></div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const csrfToken = '{{ csrf_token }}';
+let generatedImages = [];
+let selectedImageUrl = null;
+
+function generateImage() {
+    const prompt = document.getElementById('img-prompt').value.trim();
+    if (!prompt) return;
+    const btn = document.getElementById('genBtn');
+    const loading = document.getElementById('gen-loading');
+    const errDiv = document.getElementById('gen-error');
+
+    btn.disabled = true;
+    loading.classList.remove('d-none');
+    errDiv.classList.add('d-none');
+
+    fetch("{% url 'dashboard:newsletter_generate_image' %}", {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': csrfToken},
+        body: `prompt=${encodeURIComponent(prompt)}`,
+    })
+    .then(r => r.json())
+    .then(data => {
+        btn.disabled = false;
+        loading.classList.add('d-none');
+        if (data.error) {
+            errDiv.textContent = data.error;
+            errDiv.classList.remove('d-none');
+            return;
+        }
+        generatedImages.push(data.url);
+        selectedImageUrl = data.url;
+        renderGallery();
+        updatePreview();
+    })
+    .catch(e => {
+        btn.disabled = false;
+        loading.classList.add('d-none');
+        errDiv.textContent = 'Erreur: ' + e;
+        errDiv.classList.remove('d-none');
+    });
+}
+
+function renderGallery() {
+    const gallery = document.getElementById('img-gallery');
+    gallery.innerHTML = generatedImages.map((url, i) =>
+        `<img src="${url}" class="gen-img ${url === selectedImageUrl ? 'selected' : ''}" onclick="selectImage(${i})">`
+    ).join('');
+}
+
+function selectImage(i) {
+    selectedImageUrl = generatedImages[i];
+    renderGallery();
+    updatePreview();
+}
+
+function buildHtml() {
+    const title = document.getElementById('nl-title').value.trim();
+    const content = document.getElementById('nl-content').value.trim();
+    const ctaText = document.getElementById('nl-cta-text').value.trim();
+    const ctaUrl = document.getElementById('nl-cta-url').value.trim();
+
+    let html = `
+    <div style="max-width: 600px; margin: 0 auto; font-family: 'Segoe UI', Arial, sans-serif; background: #ffffff;">
+        <div style="background: linear-gradient(135deg, #6c5ce7, #a29bfe); padding: 30px; text-align: center;">
+            <h1 style="color: #ffffff; margin: 0; font-size: 24px;">MeetVoice</h1>
+        </div>`;
+
+    if (selectedImageUrl) {
+        html += `<div style="text-align: center;"><img src="${selectedImageUrl}" style="width: 100%; max-width: 600px; display: block;" alt=""></div>`;
+    }
+
+    html += `<div style="padding: 30px;">`;
+
+    if (title) {
+        html += `<h2 style="color: #333; margin-top: 0;">${title}</h2>`;
+    }
+
+    if (content) {
+        const formatted = content.replace(/\n\n/g, '</p><p>').replace(/\n/g, '<br>');
+        html += `<div style="color: #555; line-height: 1.6; font-size: 15px;"><p>${formatted}</p></div>`;
+    }
+
+    if (ctaText && ctaUrl) {
+        html += `
+        <div style="text-align: center; margin: 30px 0;">
+            <a href="${ctaUrl}" style="background: #6c5ce7; color: #ffffff; padding: 12px 30px; border-radius: 8px; text-decoration: none; font-weight: 600; display: inline-block;">${ctaText}</a>
+        </div>`;
+    }
+
+    html += `</div>
+        <div style="background: #f5f5f5; padding: 20px; text-align: center; font-size: 12px; color: #999;">
+            <p style="margin: 0;">MeetVoice - L'app de rencontres</p>
+            <p style="margin: 5px 0 0 0;">Pour vous desabonner, repondez a cet email.</p>
+        </div>
+    </div>`;
+
+    return html;
+}
+
+function updatePreview() {
+    document.getElementById('nl-preview').innerHTML = buildHtml();
+}
+
+function loadRecipients() {
+    fetch("{% url 'dashboard:newsletter_recipients' %}")
+        .then(r => r.json())
+        .then(data => {
+            document.getElementById('recipient-count').textContent = `${data.count} destinataires actifs`;
+            if (data.sample.length) {
+                document.getElementById('recipient-sample').textContent = 'Exemples: ' + data.sample.join(', ') + (data.count > 10 ? '...' : '');
+            }
+        });
+}
+
+function sendNewsletter() {
+    const subject = document.getElementById('nl-subject').value.trim();
+    const html = buildHtml();
+
+    if (!subject) { alert('Veuillez saisir un sujet'); return; }
+    if (!document.getElementById('nl-content').value.trim()) { alert('Veuillez saisir du contenu'); return; }
+
+    const customEmails = document.getElementById('nl-custom-emails').value.trim();
+    let recipients = [];
+    if (customEmails) {
+        recipients = customEmails.split('\n').map(e => e.trim()).filter(e => e.includes('@'));
+    }
+
+    const count = recipients.length || 'tous les comptes actifs';
+    if (!confirm(`Envoyer la newsletter a ${count} ?`)) return;
+
+    const btn = document.getElementById('sendBtn');
+    const progress = document.getElementById('send-progress');
+    const resultDiv = document.getElementById('send-result');
+
+    btn.disabled = true;
+    progress.classList.add('active');
+    document.getElementById('send-bar').style.width = '50%';
+    document.getElementById('send-status').textContent = 'Envoi en cours...';
+    resultDiv.innerHTML = '';
+
+    fetch("{% url 'dashboard:newsletter_send' %}", {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
+        body: JSON.stringify({ subject, html, recipients }),
+    })
+    .then(r => r.json())
+    .then(data => {
+        btn.disabled = false;
+        document.getElementById('send-bar').style.width = '100%';
+        if (data.error) {
+            document.getElementById('send-status').textContent = 'Erreur';
+            resultDiv.innerHTML = `<div class="alert alert-danger small">${data.error}</div>`;
+        } else {
+            document.getElementById('send-status').textContent = 'Termine !';
+            resultDiv.innerHTML = `
+                <div class="alert alert-success small">
+                    <i class="bi bi-check-circle"></i> ${data.sent} email(s) envoye(s)
+                    ${data.failed ? `, ${data.failed} echec(s)` : ''}
+                </div>`;
+            if (data.errors && data.errors.length) {
+                resultDiv.innerHTML += `<div class="alert alert-warning small">${data.errors.join('<br>')}</div>`;
+            }
+        }
+        setTimeout(() => { progress.classList.remove('active'); }, 3000);
+    })
+    .catch(e => {
+        btn.disabled = false;
+        resultDiv.innerHTML = `<div class="alert alert-danger small">Erreur: ${e}</div>`;
+        progress.classList.remove('active');
+    });
+}
+
+['nl-title', 'nl-content', 'nl-cta-text', 'nl-cta-url'].forEach(id => {
+    document.getElementById(id).addEventListener('input', updatePreview);
+});
+</script>
+{% endblock %}

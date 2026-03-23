@@ -1,0 +1,361 @@
+{% extends "dashboard/base.html" %}
+{% block title %}Contabo VPS - MeetVoice{% endblock %}
+{% block page_title %}Contabo VPS{% endblock %}
+
+{% block extra_css %}
+<style>
+    .contabo-card { background: #1a1a24; border: 1px solid #2a2a35; border-radius: 12px; padding: 1.2rem; margin-bottom: 1rem; }
+    .contabo-card .vps-status { font-size: .75rem; font-weight: 600; text-transform: uppercase; padding: 2px 8px; border-radius: 4px; }
+    .contabo-card .vps-status.running { background: rgba(0,210,91,.15); color: #00d25b; }
+    .contabo-card .vps-status.stopped { background: rgba(255,65,105,.15); color: #ff4169; }
+    .contabo-card .vps-status.other { background: rgba(255,193,7,.15); color: #ffc107; }
+    .contabo-card .vps-role { font-size: .7rem; background: rgba(108,92,231,.15); color: #a29bfe; padding: 2px 8px; border-radius: 4px; }
+    .contabo-card .spec-badge { font-size: .7rem; background: #0f0f13; color: #8a8a9a; padding: 3px 8px; border-radius: 4px; display: inline-block; }
+    .contabo-actions .btn { font-size: .7rem; padding: 2px 8px; }
+    .modal-content.dark { background: #1a1a24; border: 1px solid #2a2a35; color: #e0e0e0; }
+    .modal-content.dark .modal-header { border-color: #2a2a35; }
+    .modal-content.dark .modal-footer { border-color: #2a2a35; }
+    .modal-content.dark input, .modal-content.dark select {
+        background: #0f0f13; border: 1px solid #2a2a35; color: #e0e0e0; border-radius: 8px;
+    }
+    .modal-content.dark input:focus, .modal-content.dark select:focus {
+        border-color: var(--accent); box-shadow: 0 0 0 2px rgba(108,92,231,.2);
+    }
+    .warning-box { background: rgba(255,65,105,.1); border: 1px solid rgba(255,65,105,.3); border-radius: 8px; padding: 1rem; color: #ff4169; font-size: .85rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <span class="text-muted small"><i class="bi bi-cloud-fill"></i> Gestion des VPS Contabo</span>
+    </div>
+    <button class="btn btn-sm btn-accent" onclick="fetchContabo()"><i class="bi bi-arrow-clockwise"></i> Rafraîchir</button>
+</div>
+
+<div id="contabo-loading" class="text-muted small mb-2"><i class="bi bi-hourglass-split"></i> Chargement...</div>
+<div id="contabo-error" class="alert alert-danger d-none small"></div>
+<div id="contabo-list" class="row g-3"></div>
+
+<div class="modal fade" id="passwordModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content dark">
+            <div class="modal-header">
+                <h6 class="modal-title"><i class="bi bi-key-fill"></i> Changer le mot de passe root</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="small text-muted">VPS : <strong id="pwd-vps-name"></strong> (#<span id="pwd-vps-id"></span>)</p>
+                <div class="mb-3">
+                    <label class="form-label small">Nouveau mot de passe root</label>
+                    <div class="input-group">
+                        <input type="password" id="pwd-input" class="form-control" placeholder="Min. 8 caractères" minlength="8">
+                        <button class="btn btn-outline-secondary" type="button" onclick="togglePwdVisibility()"><i class="bi bi-eye" id="pwd-eye"></i></button>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small">Confirmer</label>
+                    <input type="password" id="pwd-confirm" class="form-control" placeholder="Retapez le mot de passe">
+                </div>
+                <div id="pwd-error" class="text-danger small d-none"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Annuler</button>
+                <button class="btn btn-accent btn-sm" onclick="submitPassword()" id="pwd-submit-btn"><i class="bi bi-check-lg"></i> Appliquer</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="reinstallModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content dark">
+            <div class="modal-header">
+                <h6 class="modal-title"><i class="bi bi-arrow-clockwise"></i> Réinstaller l'OS</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="warning-box mb-3">
+                    <i class="bi bi-exclamation-triangle-fill"></i> <strong>ATTENTION :</strong> Cette action va <strong>effacer toutes les données</strong> du VPS et réinstaller un OS vierge. Cette opération est <strong>irréversible</strong>. Assurez-vous d'avoir une sauvegarde avant de continuer.
+                </div>
+                <p class="small text-muted">VPS : <strong id="reinstall-vps-name"></strong> (#<span id="reinstall-vps-id"></span>)</p>
+                <div class="mb-3">
+                    <label class="form-label small">Choisir l'OS</label>
+                    <select id="reinstall-image" class="form-select">
+                        <option value="">Chargement des images...</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small text-danger">Tapez <strong>REINSTALLER</strong> pour confirmer</label>
+                    <input type="text" id="reinstall-confirm" class="form-control" placeholder="REINSTALLER">
+                </div>
+                <div id="reinstall-error" class="text-danger small d-none"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Annuler</button>
+                <button class="btn btn-danger btn-sm" onclick="submitReinstall()" id="reinstall-submit-btn"><i class="bi bi-exclamation-triangle"></i> Réinstaller</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const csrfToken = '{{ csrf_token }}';
+
+function statusClass(s) {
+    if (s === 'running') return 'running';
+    if (s === 'stopped') return 'stopped';
+    return 'other';
+}
+
+function formatMb(mb) {
+    mb = parseInt(mb) || 0;
+    if (mb >= 1024) return (mb / 1024).toFixed(1) + ' GB';
+    return mb + ' MB';
+}
+
+function renderContaboCard(inst) {
+    const statusCls = statusClass(inst.status);
+    const role = inst.role ? `<span class="vps-role">${inst.role}</span>` : '';
+    const allIps = [inst.ipV4].concat(inst.additionalIps || []).filter(Boolean).join(', ');
+
+    return `
+    <div class="col-md-6 col-lg-4">
+        <div class="contabo-card">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+                <div>
+                    <div class="fw-semibold" style="color: var(--accent-light);">
+                        <i class="bi bi-hdd-rack"></i> ${inst.displayName || inst.name}
+                    </div>
+                    <div class="text-muted" style="font-size: .75rem;">${inst.name} &middot; #${inst.instanceId}</div>
+                </div>
+                <div class="d-flex gap-1 align-items-center">
+                    ${role}
+                    <span class="vps-status ${statusCls}">${inst.status}</span>
+                </div>
+            </div>
+            <div class="d-flex flex-wrap gap-1 mb-2">
+                <span class="spec-badge"><i class="bi bi-cpu"></i> ${inst.cpuCores} vCPU</span>
+                <span class="spec-badge"><i class="bi bi-memory"></i> ${formatMb(inst.ramMb)}</span>
+                <span class="spec-badge"><i class="bi bi-hdd"></i> ${formatMb(inst.diskMb)}</span>
+                <span class="spec-badge">${inst.productName || inst.productId}</span>
+                <span class="spec-badge">${inst.productType}</span>
+            </div>
+            <div class="mb-2" style="font-size: .75rem;">
+                <span class="text-muted">IP:</span> <span class="text-light">${allIps}</span>
+                <br><span class="text-muted">Région:</span> ${inst.dataCenter || inst.region}
+                <br><span class="text-muted">OS:</span> ${inst.osType}
+                ${inst.createdDate ? '<br><span class="text-muted">Créé:</span> ' + new Date(inst.createdDate).toLocaleDateString('fr-FR') : ''}
+            </div>
+            <div class="contabo-actions d-flex gap-1 flex-wrap">
+                ${inst.status === 'running' ? `
+                    <button class="btn btn-outline-warning" onclick="contaboAction(${inst.instanceId}, 'restart')"><i class="bi bi-arrow-repeat"></i> Restart</button>
+                    <button class="btn btn-outline-info" onclick="contaboAction(${inst.instanceId}, 'shutdown')"><i class="bi bi-power"></i> Shutdown</button>
+                    <button class="btn btn-outline-danger" onclick="contaboAction(${inst.instanceId}, 'stop')"><i class="bi bi-stop-circle"></i> Stop</button>
+                ` : `
+                    <button class="btn btn-outline-success" onclick="contaboAction(${inst.instanceId}, 'start')"><i class="bi bi-play-circle"></i> Start</button>
+                `}
+                <button class="btn btn-outline-secondary" onclick="openPasswordModal(${inst.instanceId}, '${(inst.displayName || inst.name).replace(/'/g, "\\'")}')"><i class="bi bi-key"></i> Mot de passe</button>
+                <button class="btn btn-outline-danger" onclick="openReinstallModal(${inst.instanceId}, '${(inst.displayName || inst.name).replace(/'/g, "\\'")}')"><i class="bi bi-arrow-clockwise"></i> Réinstaller OS</button>
+            </div>
+        </div>
+    </div>`;
+}
+
+function fetchContabo() {
+    const loading = document.getElementById('contabo-loading');
+    const errDiv = document.getElementById('contabo-error');
+    const list = document.getElementById('contabo-list');
+    loading.classList.remove('d-none');
+    errDiv.classList.add('d-none');
+
+    fetch("{% url 'dashboard:contabo_api' %}")
+        .then(r => r.json())
+        .then(data => {
+            loading.classList.add('d-none');
+            if (data.error) {
+                errDiv.textContent = data.error;
+                errDiv.classList.remove('d-none');
+                return;
+            }
+            list.innerHTML = data.instances.map(renderContaboCard).join('');
+        })
+        .catch(e => {
+            loading.classList.add('d-none');
+            errDiv.textContent = 'Erreur de connexion: ' + e;
+            errDiv.classList.remove('d-none');
+        });
+}
+
+function contaboAction(instanceId, action) {
+    const labels = {start: 'Démarrer', stop: 'Arrêter', restart: 'Redémarrer', shutdown: 'Éteindre'};
+    if (!confirm(`${labels[action]} le VPS #${instanceId} ?`)) return;
+
+    fetch("{% url 'dashboard:contabo_action' %}", {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-CSRFToken': csrfToken,
+        },
+        body: `instance_id=${instanceId}&action=${action}`,
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.error) {
+            alert('Erreur: ' + data.error);
+        } else {
+            setTimeout(fetchContabo, 3000);
+        }
+    })
+    .catch(e => alert('Erreur: ' + e));
+}
+
+let _currentPwdInstanceId = null;
+let _currentReinstallInstanceId = null;
+let _imagesLoaded = false;
+
+function openPasswordModal(instanceId, name) {
+    _currentPwdInstanceId = instanceId;
+    document.getElementById('pwd-vps-name').textContent = name;
+    document.getElementById('pwd-vps-id').textContent = instanceId;
+    document.getElementById('pwd-input').value = '';
+    document.getElementById('pwd-confirm').value = '';
+    document.getElementById('pwd-error').classList.add('d-none');
+    document.getElementById('pwd-input').type = 'password';
+    document.getElementById('pwd-eye').className = 'bi bi-eye';
+    new bootstrap.Modal(document.getElementById('passwordModal')).show();
+}
+
+function togglePwdVisibility() {
+    const inp = document.getElementById('pwd-input');
+    const eye = document.getElementById('pwd-eye');
+    if (inp.type === 'password') {
+        inp.type = 'text';
+        eye.className = 'bi bi-eye-slash';
+    } else {
+        inp.type = 'password';
+        eye.className = 'bi bi-eye';
+    }
+}
+
+function submitPassword() {
+    const pw = document.getElementById('pwd-input').value;
+    const confirm = document.getElementById('pwd-confirm').value;
+    const errDiv = document.getElementById('pwd-error');
+    errDiv.classList.add('d-none');
+
+    if (pw.length < 8) {
+        errDiv.textContent = 'Le mot de passe doit faire au moins 8 caractères';
+        errDiv.classList.remove('d-none');
+        return;
+    }
+    if (pw !== confirm) {
+        errDiv.textContent = 'Les mots de passe ne correspondent pas';
+        errDiv.classList.remove('d-none');
+        return;
+    }
+
+    const btn = document.getElementById('pwd-submit-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="bi bi-hourglass-split"></i> En cours...';
+
+    fetch("{% url 'dashboard:contabo_change_password' %}", {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': csrfToken},
+        body: `instance_id=${_currentPwdInstanceId}&password=${encodeURIComponent(pw)}`,
+    })
+    .then(r => r.json())
+    .then(data => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-check-lg"></i> Appliquer';
+        if (data.error) {
+            errDiv.textContent = data.error;
+            errDiv.classList.remove('d-none');
+        } else {
+            bootstrap.Modal.getInstance(document.getElementById('passwordModal')).hide();
+            alert('Mot de passe root changé avec succès !');
+        }
+    })
+    .catch(e => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-check-lg"></i> Appliquer';
+        errDiv.textContent = 'Erreur: ' + e;
+        errDiv.classList.remove('d-none');
+    });
+}
+
+function openReinstallModal(instanceId, name) {
+    _currentReinstallInstanceId = instanceId;
+    document.getElementById('reinstall-vps-name').textContent = name;
+    document.getElementById('reinstall-vps-id').textContent = instanceId;
+    document.getElementById('reinstall-confirm').value = '';
+    document.getElementById('reinstall-error').classList.add('d-none');
+    new bootstrap.Modal(document.getElementById('reinstallModal')).show();
+
+    if (!_imagesLoaded) {
+        fetch("{% url 'dashboard:contabo_images' %}")
+            .then(r => r.json())
+            .then(data => {
+                if (data.error) return;
+                const sel = document.getElementById('reinstall-image');
+                sel.innerHTML = '<option value="">-- Choisir un OS --</option>';
+                data.images.forEach(img => {
+                    sel.innerHTML += `<option value="${img.imageId}">${img.name} (${img.osType}${img.version ? ' ' + img.version : ''})</option>`;
+                });
+                _imagesLoaded = true;
+            });
+    }
+}
+
+function submitReinstall() {
+    const imageId = document.getElementById('reinstall-image').value;
+    const confirmText = document.getElementById('reinstall-confirm').value.trim();
+    const errDiv = document.getElementById('reinstall-error');
+    errDiv.classList.add('d-none');
+
+    if (!imageId) {
+        errDiv.textContent = 'Veuillez choisir un OS';
+        errDiv.classList.remove('d-none');
+        return;
+    }
+    if (confirmText !== 'REINSTALLER') {
+        errDiv.textContent = 'Tapez exactement REINSTALLER pour confirmer';
+        errDiv.classList.remove('d-none');
+        return;
+    }
+
+    const btn = document.getElementById('reinstall-submit-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Réinstallation...';
+
+    fetch("{% url 'dashboard:contabo_reinstall' %}", {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': csrfToken},
+        body: `instance_id=${_currentReinstallInstanceId}&image_id=${encodeURIComponent(imageId)}`,
+    })
+    .then(r => r.json())
+    .then(data => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-exclamation-triangle"></i> Réinstaller';
+        if (data.error) {
+            errDiv.textContent = data.error;
+            errDiv.classList.remove('d-none');
+        } else {
+            bootstrap.Modal.getInstance(document.getElementById('reinstallModal')).hide();
+            alert('Réinstallation lancée ! Le VPS sera disponible dans quelques minutes.');
+            setTimeout(fetchContabo, 5000);
+        }
+    })
+    .catch(e => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-exclamation-triangle"></i> Réinstaller';
+        errDiv.textContent = 'Erreur: ' + e;
+        errDiv.classList.remove('d-none');
+    });
+}
+
+fetchContabo();
+</script>
+{% endblock %}

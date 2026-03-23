@@ -1,0 +1,703 @@
+{% extends "dashboard/base.html" %}
+{% block title %}Modération - MeetVoice{% endblock %}
+{% block page_title %}Modération{% endblock %}
+
+{% block extra_css %}
+<style>
+    .nav-pills .nav-link {
+        color: #8a8a9a; border-radius: 8px; font-size: .85rem;
+        padding: .5rem 1rem; transition: all .15s;
+    }
+    .nav-pills .nav-link.active { background: var(--accent); color: #fff; }
+    .nav-pills .nav-link:hover:not(.active) { background: rgba(108,92,231,.12); color: #e0e0e0; }
+    .post-card {
+        background: #0f0f13; border: 1px solid #1e1e2a; border-radius: 12px;
+        padding: 1.25rem; margin-bottom: 1rem; transition: border-color .15s;
+    }
+    .post-card:hover { border-color: #3a3a4a; }
+    .post-avatar {
+        width: 40px; height: 40px; border-radius: 50%; object-fit: cover;
+        border: 2px solid #2a2a35;
+    }
+    .post-avatar-sm {
+        width: 28px; height: 28px; border-radius: 50%; object-fit: cover;
+        border: 1px solid #2a2a35;
+    }
+    .post-image {
+        max-width: 100%; max-height: 300px; border-radius: 8px; object-fit: cover;
+        margin-top: .75rem;
+    }
+    .comment-block {
+        background: #16161d; border-left: 3px solid #6c5ce7; border-radius: 0 8px 8px 0;
+        padding: .75rem 1rem; margin-top: .5rem;
+    }
+    .reply-block {
+        background: #1a1a24; border-left: 3px solid #00cec9; border-radius: 0 6px 6px 0;
+        padding: .5rem .75rem; margin-top: .4rem; margin-left: 1.5rem;
+    }
+    .stat-pill {
+        display: inline-flex; align-items: center; gap: .3rem;
+        font-size: .75rem; color: #8a8a9a; padding: .2rem .5rem;
+        background: #1a1a24; border-radius: 20px;
+    }
+    .delete-btn {
+        opacity: 0; transition: opacity .15s;
+        background: none; border: none; color: #ff4169; cursor: pointer;
+        font-size: .8rem; padding: .2rem .4rem;
+    }
+    .post-card:hover .delete-btn,
+    .comment-block:hover > .d-flex .delete-btn,
+    .reply-block:hover > .d-flex .delete-btn { opacity: 1; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="stat-card d-flex justify-content-between align-items-center">
+            <div>
+                <div class="stat-value">{{ total_mongo_posts }}</div>
+                <div class="stat-label">Posts</div>
+            </div>
+            <div class="stat-icon"><i class="bi bi-file-text"></i></div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card d-flex justify-content-between align-items-center">
+            <div>
+                <div class="stat-value">{{ total_mongo_comments }}</div>
+                <div class="stat-label">Commentaires</div>
+            </div>
+            <div class="stat-icon"><i class="bi bi-chat-dots"></i></div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card d-flex justify-content-between align-items-center">
+            <div>
+                <div class="stat-value">{{ total_mongo_replies }}</div>
+                <div class="stat-label">Réponses</div>
+            </div>
+            <div class="stat-icon"><i class="bi bi-reply"></i></div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card d-flex justify-content-between align-items-center">
+            <div>
+                <div class="stat-value">{{ signalements|length }}</div>
+                <div class="stat-label">Signalements</div>
+            </div>
+            <div class="stat-icon"><i class="bi bi-exclamation-triangle"></i></div>
+        </div>
+    </div>
+</div>
+
+<ul class="nav nav-pills mb-4" role="tablist">
+    <li class="nav-item">
+        <button class="nav-link active" data-bs-toggle="pill" data-bs-target="#tab-posts">
+            <i class="bi bi-file-text"></i> Posts ({{ total_mongo_posts }})
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-messages">
+            <i class="bi bi-envelope"></i> Messagerie ({{ mongo_messages|length }})
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-nsfw">
+            <i class="bi bi-exclamation-triangle"></i> NSFW ({{ nsfw_photos|length }})
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-shocking">
+            <i class="bi bi-eye-slash"></i> Choquant ({{ shocking_photos|length }})
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-profile-comments">
+            <i class="bi bi-person-lines-fill"></i> Com. profil ({{ profile_comments|length }})
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-photo-comments">
+            <i class="bi bi-image"></i> Com. photos ({{ photo_comments|length }})
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-video-comments">
+            <i class="bi bi-camera-video"></i> Com. vidéos ({{ video_comments|length }})
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-event-comments">
+            <i class="bi bi-calendar-event"></i> Com. événements ({{ event_comments|length }})
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-blacklist">
+            <i class="bi bi-shield-x"></i> Blacklist ({{ blacklist|length }})
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-signalements">
+            <i class="bi bi-flag"></i> Signalements ({{ signalements|length }})
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content">
+
+    <div class="tab-pane fade show active" id="tab-posts">
+        <div class="card-dark p-4">
+            {% for post in mongo_posts %}
+            <div class="post-card" id="post-{{ post.id }}">
+                <div class="d-flex align-items-start gap-3">
+                    {% if post.avatar %}
+                    <img src="{{ post.avatar }}" class="post-avatar" alt="">
+                    {% else %}
+                    <div class="post-avatar d-flex align-items-center justify-content-center" style="background: #2a2a35;">
+                        <i class="bi bi-person" style="color: #6c5ce7;"></i>
+                    </div>
+                    {% endif %}
+                    <div class="flex-grow-1">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <span class="fw-semibold">{{ post.username }}</span>
+                                {% if post.category %}
+                                <span class="badge bg-secondary ms-2" style="font-size: .65rem;">{{ post.category }}</span>
+                                {% endif %}
+                                {% if post.groupe_id %}
+                                <span class="badge" style="font-size: .65rem; background: rgba(0,206,201,.15); color: #00cec9;">groupe #{{ post.groupe_id }}</span>
+                                {% endif %}
+                            </div>
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="text-muted" style="font-size: .7rem;">{{ post.date_creation|date:"d/m/Y H:i" }}</span>
+                                <button class="delete-btn" onclick="deletePost('{{ post.id }}', this)" title="Supprimer le post">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                        {% if post.titre %}
+                        <div class="fw-semibold mt-1" style="color: #a29bfe;">{{ post.titre }}</div>
+                        {% endif %}
+                        {% if post.text %}
+                        <p class="mb-1 small" style="color: #c0c0c0;">{{ post.text }}</p>
+                        {% endif %}
+                        {% if post.image %}
+                        <img src="{{ post.image }}" class="post-image" alt="">
+                        {% endif %}
+                        <div class="d-flex gap-3 mt-2">
+                            <span class="stat-pill"><i class="bi bi-heart-fill" style="color: #e84393;"></i> {{ post.likes|length }}</span>
+                            <span class="stat-pill"><i class="bi bi-chat" style="color: #6c5ce7;"></i> {{ post.comments|length }}</span>
+                            {% if post.pouce_bleu %}
+                            <span class="stat-pill"><i class="bi bi-hand-thumbs-up-fill" style="color: #0984e3;"></i> {{ post.pouce_bleu }}</span>
+                            {% endif %}
+                            {% if post.boost %}
+                            <span class="stat-pill"><i class="bi bi-lightning-fill" style="color: #fdcb6e;"></i> {{ post.boost }}</span>
+                            {% endif %}
+                        </div>
+
+                        {% for comment in post.comments %}
+                        <div class="comment-block" id="comment-{{ comment.id }}">
+                            <div class="d-flex align-items-start gap-2">
+                                {% if comment.avatar %}
+                                <img src="{{ comment.avatar }}" class="post-avatar-sm" alt="">
+                                {% endif %}
+                                <div class="flex-grow-1">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <span class="fw-semibold small">{{ comment.username }}</span>
+                                        <div class="d-flex align-items-center gap-2">
+                                            {% if comment.note %}
+                                            <span style="font-size: .65rem; color: #fdcb6e;">
+                                                {% for i in "12345" %}{% if forloop.counter <= comment.note %}<i class="bi bi-star-fill"></i>{% else %}<i class="bi bi-star"></i>{% endif %}{% endfor %}
+                                            </span>
+                                            {% endif %}
+                                            <span class="text-muted" style="font-size: .65rem;">{{ comment.date_creation|date:"d/m/Y H:i" }}</span>
+                                            <button class="delete-btn" onclick="deleteComment('{{ post.id }}', '{{ comment.id }}', this)" title="Supprimer">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <p class="mb-0 small" style="color: #b0b0b0;">{{ comment.text }}</p>
+                                    {% if comment.likes %}<span class="stat-pill mt-1"><i class="bi bi-heart-fill" style="color: #e84393; font-size: .65rem;"></i> {{ comment.likes|length }}</span>{% endif %}
+                                </div>
+                            </div>
+
+                            {% for reply in comment.replies %}
+                            <div class="reply-block" id="reply-{{ reply.id }}">
+                                <div class="d-flex align-items-start gap-2">
+                                    {% if reply.avatar %}
+                                    <img src="{{ reply.avatar }}" class="post-avatar-sm" alt="" style="width: 22px; height: 22px;">
+                                    {% endif %}
+                                    <div class="flex-grow-1">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <span class="fw-semibold" style="font-size: .75rem;">{{ reply.username }}</span>
+                                            <div class="d-flex align-items-center gap-2">
+                                                <span class="text-muted" style="font-size: .6rem;">{{ reply.date_creation|date:"d/m/Y H:i" }}</span>
+                                                <button class="delete-btn" onclick="deleteReply('{{ post.id }}', '{{ comment.id }}', '{{ reply.id }}', this)" title="Supprimer">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <p class="mb-0" style="font-size: .8rem; color: #a0a0a0;">{{ reply.text }}</p>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            {% empty %}
+            <p class="text-muted mb-0 text-center py-3">Aucun post</p>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="tab-pane fade" id="tab-messages">
+        <div class="card-dark p-4">
+            {% for pair, msgs in conversations.items %}
+            <div class="mb-4 p-3 rounded" style="background: #0f0f13; border: 1px solid #1e1e2a; border-radius: 12px;">
+                <div class="d-flex align-items-center gap-2 mb-3 pb-2" style="border-bottom: 1px solid #2a2a35;">
+                    <i class="bi bi-chat-left-text" style="color: #0984e3;"></i>
+                    <span class="fw-semibold small">{{ pair.0 }}</span>
+                    <i class="bi bi-arrow-left-right text-muted" style="font-size: .7rem;"></i>
+                    <span class="fw-semibold small">{{ pair.1 }}</span>
+                    <span class="badge bg-secondary ms-auto" style="font-size: .65rem;">{{ msgs|length }} msg</span>
+                </div>
+                {% for msg in msgs %}
+                <div class="d-flex align-items-start gap-2 mb-2" id="msg-{{ msg.id }}">
+                    <div class="flex-shrink-0 text-center" style="width: 70px;">
+                        <span class="fw-semibold" style="font-size: .75rem; color: {% if msg.from == pair.0 %}#6c5ce7{% else %}#00cec9{% endif %};">{{ msg.from }}</span>
+                    </div>
+                    <div class="flex-grow-1 p-2 rounded" style="background: #16161d; border-radius: 8px;">
+                        <p class="mb-0 small" style="color: #c0c0c0;">{{ msg.message }}</p>
+                        <div class="d-flex justify-content-between align-items-center mt-1">
+                            <span class="text-muted" style="font-size: .6rem;">{{ msg.timestamp|date:"d/m/Y H:i" }}</span>
+                            <div class="d-flex align-items-center gap-2">
+                                {% if msg.read %}
+                                <span style="font-size: .6rem; color: #00cec9;"><i class="bi bi-check2-all"></i> Lu</span>
+                                {% else %}
+                                <span style="font-size: .6rem; color: #fdcb6e;"><i class="bi bi-check2"></i> Non lu</span>
+                                {% endif %}
+                                <button class="delete-btn" style="opacity: 1; font-size: .7rem;" onclick="deleteMessage('{{ msg.id }}', this)" title="Supprimer">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% empty %}
+            <p class="text-muted mb-0 text-center py-3">Aucun message</p>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="tab-pane fade" id="tab-nsfw">
+        <div class="card-dark p-4">
+            {% if nsfw_photos %}
+            <div class="d-flex flex-wrap gap-3">
+                {% for photo in nsfw_photos %}
+                <div class="text-center p-2 rounded" style="background: #0f0f13; width: 160px;" id="photo-{{ photo.pk }}">
+                    <div class="mb-2" style="height: 120px; overflow: hidden; border-radius: 8px;">
+                        {% if photo.photos %}
+                        <img src="{{ photo.photos }}" style="width: 100%; height: 100%; object-fit: cover; filter: blur(10px);"
+                             onclick="this.style.filter = this.style.filter ? '' : 'blur(10px)'" role="button">
+                        {% endif %}
+                    </div>
+                    <div class="small text-muted mb-2">{{ photo.compte }}</div>
+                    <div class="btn-group btn-group-sm">
+                        <button class="btn btn-outline-success moderate-btn" data-pk="{{ photo.pk }}" data-action="approve">
+                            <i class="bi bi-check"></i>
+                        </button>
+                        <button class="btn btn-outline-danger moderate-btn" data-pk="{{ photo.pk }}" data-action="reject">
+                            <i class="bi bi-x"></i>
+                        </button>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p class="text-muted mb-0 text-center py-3">Aucune photo NSFW en attente</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="tab-pane fade" id="tab-shocking">
+        <div class="card-dark p-4">
+            {% if shocking_photos %}
+            <div class="d-flex flex-wrap gap-3">
+                {% for photo in shocking_photos %}
+                <div class="text-center p-2 rounded" style="background: #0f0f13; width: 160px;" id="photo-{{ photo.pk }}">
+                    <div class="mb-2" style="height: 120px; overflow: hidden; border-radius: 8px;">
+                        {% if photo.photos %}
+                        <img src="{{ photo.photos }}" style="width: 100%; height: 100%; object-fit: cover; filter: blur(10px);"
+                             onclick="this.style.filter = this.style.filter ? '' : 'blur(10px)'" role="button">
+                        {% endif %}
+                    </div>
+                    <div class="small text-muted mb-2">{{ photo.compte }}</div>
+                    <div class="btn-group btn-group-sm">
+                        <button class="btn btn-outline-success moderate-btn" data-pk="{{ photo.pk }}" data-action="approve">
+                            <i class="bi bi-check"></i>
+                        </button>
+                        <button class="btn btn-outline-danger moderate-btn" data-pk="{{ photo.pk }}" data-action="reject">
+                            <i class="bi bi-x"></i>
+                        </button>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p class="text-muted mb-0 text-center py-3">Aucune photo choquante en attente</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="tab-pane fade" id="tab-profile-comments">
+        <div class="card-dark p-4">
+            {% if profile_comments %}
+            <table class="table table-dark-custom table-hover align-middle">
+                <thead>
+                    <tr>
+                        <th>Auteur</th>
+                        <th>Profil cible</th>
+                        <th>Contenu</th>
+                        <th>Signalé</th>
+                        <th>Date</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for c in profile_comments %}
+                    <tr>
+                        <td>{{ c.auteur }}</td>
+                        <td>{{ c.profil_utilisateur }}</td>
+                        <td class="small">{{ c.contenu|truncatechars:80 }}</td>
+                        <td>
+                            {% if c.signale %}
+                            <span class="badge bg-danger"><i class="bi bi-flag-fill"></i> {{ c.raison_signalement|default:"Oui" }}</span>
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td class="small text-muted">{{ c.date_creation|date:"d/m/Y H:i" }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p class="text-muted mb-0 text-center py-3">Aucun commentaire de profil</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="tab-pane fade" id="tab-photo-comments">
+        <div class="card-dark p-4">
+            {% if photo_comments %}
+            <table class="table table-dark-custom table-hover align-middle">
+                <thead>
+                    <tr>
+                        <th style="width: 60px;">Photo</th>
+                        <th>Auteur</th>
+                        <th>Contenu</th>
+                        <th>Signalé</th>
+                        <th>Date</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for c in photo_comments %}
+                    <tr>
+                        <td>
+                            {% if c.photo.thumbnail %}
+                            <img src="{{ c.photo.thumbnail }}" style="width: 44px; height: 44px; object-fit: cover; border-radius: 6px; border: 1px solid #2a2a35;">
+                            {% elif c.photo.photos %}
+                            <img src="{{ c.photo.photos }}" style="width: 44px; height: 44px; object-fit: cover; border-radius: 6px; border: 1px solid #2a2a35;">
+                            {% else %}
+                            <div style="width: 44px; height: 44px; border-radius: 6px; background: #2a2a35; display: flex; align-items: center; justify-content: center;"><i class="bi bi-image text-muted"></i></div>
+                            {% endif %}
+                        </td>
+                        <td>{{ c.auteur }}</td>
+                        <td class="small">{{ c.contenu|truncatechars:80 }}</td>
+                        <td>
+                            {% if c.signale %}
+                            <span class="badge bg-danger"><i class="bi bi-flag-fill"></i> {{ c.raison_signalement|default:"Oui" }}</span>
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td class="small text-muted">{{ c.date_creation|date:"d/m/Y H:i" }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p class="text-muted mb-0 text-center py-3">Aucun commentaire de photo</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="tab-pane fade" id="tab-video-comments">
+        <div class="card-dark p-4">
+            {% if video_comments %}
+            <table class="table table-dark-custom table-hover align-middle">
+                <thead>
+                    <tr>
+                        <th>Auteur</th>
+                        <th>Vidéo</th>
+                        <th>Contenu</th>
+                        <th>Signalé</th>
+                        <th>Date</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for c in video_comments %}
+                    <tr>
+                        <td>{{ c.auteur }}</td>
+                        <td>{{ c.video }}</td>
+                        <td class="small">{{ c.contenu|truncatechars:80 }}</td>
+                        <td>
+                            {% if c.signale %}
+                            <span class="badge bg-danger"><i class="bi bi-flag-fill"></i> {{ c.raison_signalement|default:"Oui" }}</span>
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td class="small text-muted">{{ c.date_creation|date:"d/m/Y H:i" }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p class="text-muted mb-0 text-center py-3">Aucun commentaire vidéo/événement</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="tab-pane fade" id="tab-event-comments">
+        {% if events_list %}
+        <div class="accordion" id="eventsAccordion">
+            {% for ev in events_list %}
+            <div class="card-dark mb-3" style="border-radius: 12px; overflow: hidden;">
+                <div class="d-flex align-items-center gap-3 p-3" style="cursor: pointer; background: #1a1a24;" data-bs-toggle="collapse" data-bs-target="#evt-{{ ev.id }}">
+                    {% if ev.image_url %}
+                    <img src="{{ ev.image_url }}" style="width: 50px; height: 50px; border-radius: 8px; object-fit: cover;">
+                    {% else %}
+                    <div style="width: 50px; height: 50px; border-radius: 8px; background: #2a2a35; display: flex; align-items: center; justify-content: center;">
+                        <i class="bi bi-calendar-event" style="color: #6c5ce7;"></i>
+                    </div>
+                    {% endif %}
+                    <div class="flex-grow-1">
+                        <div class="fw-semibold" style="color: var(--accent-light);">{{ ev.title }}</div>
+                        <div class="small text-muted">
+                            {% if ev.event_type %}<span class="badge bg-secondary" style="font-size: .65rem;">{{ ev.event_type }}</span>{% endif %}
+                            {% if ev.lieu %}{{ ev.lieu }}{% endif %}
+                        </div>
+                    </div>
+                    {% with comments=event_comments_grouped|default_if_none:"" %}
+                    <span class="badge bg-secondary">
+                        {% for eid, clist in event_comments_grouped.items %}{% if eid == ev.id %}{{ clist|length }}{% endif %}{% endfor %} commentaire(s)
+                    </span>
+                    {% endwith %}
+                    <i class="bi bi-chevron-down text-muted"></i>
+                </div>
+                <div class="collapse" id="evt-{{ ev.id }}">
+                    <div class="p-3" style="background: #0f0f13;">
+                        {% for eid, clist in event_comments_grouped.items %}
+                        {% if eid == ev.id %}
+                        {% for c in clist %}
+                        <div class="d-flex align-items-start gap-2 mb-3 p-2 rounded {% if c.is_hidden %}opacity-50{% endif %}" id="event-comment-{{ c.id }}" style="background: #16161d; border-radius: 8px;">
+                            {% if c.avatar %}
+                            <img src="{{ c.avatar }}" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover; flex-shrink: 0;">
+                            {% else %}
+                            <div style="width: 32px; height: 32px; border-radius: 50%; background: #2a2a35; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                                <i class="bi bi-person" style="font-size: .8rem; color: #6c5ce7;"></i>
+                            </div>
+                            {% endif %}
+                            <div class="flex-grow-1">
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <div>
+                                        <span class="fw-semibold small">{{ c.username|default:c.name }}</span>
+                                        {% if c.is_hidden %}<span class="badge bg-warning text-dark" style="font-size: .6rem;">MASQUÉ</span>{% endif %}
+                                        {% if c.reports %}<span class="badge bg-danger" style="font-size: .6rem;"><i class="bi bi-flag-fill"></i> {{ c.reports|length }} signalement(s)</span>{% endif %}
+                                    </div>
+                                    <span class="text-muted" style="font-size: .7rem;">{{ c.created_at|date:"d/m/Y H:i" }}</span>
+                                </div>
+                                <p class="mb-1 small" style="color: #c0c0c0;" id="msg-text-{{ c.id }}">{{ c.message }}</p>
+                                <div class="d-flex align-items-center gap-2">
+                                    {% if c.likes_count %}<span style="font-size: .7rem; color: #e84393;"><i class="bi bi-heart-fill"></i> {{ c.likes_count }}</span>{% endif %}
+                                    {% if c.dislikes_count %}<span style="font-size: .7rem; color: #636e72;"><i class="bi bi-hand-thumbs-down-fill"></i> {{ c.dislikes_count }}</span>{% endif %}
+                                </div>
+                            </div>
+                            <div class="d-flex flex-column gap-1 flex-shrink-0">
+                                <button class="btn btn-sm btn-outline-info" style="font-size: .65rem; padding: 1px 6px;" onclick="editEventComment('{{ c.id }}')" title="Modifier">
+                                    <i class="bi bi-pencil"></i>
+                                </button>
+                                <button class="btn btn-sm btn-outline-warning" style="font-size: .65rem; padding: 1px 6px;" onclick="toggleHideEventComment('{{ c.id }}')" title="Masquer/Afficher">
+                                    <i class="bi bi-eye-slash"></i>
+                                </button>
+                                <button class="btn btn-sm btn-outline-danger" style="font-size: .65rem; padding: 1px 6px;" onclick="deleteEventComment('{{ c.id }}')" title="Supprimer">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                        {% endfor %}
+                        {% endif %}
+                        {% empty %}
+                        <p class="text-muted small mb-0">Aucun commentaire</p>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="card-dark p-4">
+            <p class="text-muted mb-0 text-center py-3">Aucun événement</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="tab-pane fade" id="tab-blacklist">
+        <div class="card-dark p-4">
+            {% if blacklist %}
+            <table class="table table-dark-custom table-hover align-middle">
+                <thead>
+                    <tr><th>Bloqueur</th><th>Bloqué</th><th>Date</th></tr>
+                </thead>
+                <tbody>
+                    {% for b in blacklist %}
+                    <tr>
+                        <td>{{ b.bloqueur }}</td>
+                        <td>{{ b.bloque }}</td>
+                        <td class="small text-muted">{{ b.date_creation|date:"d/m/Y H:i"|default:"-" }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p class="text-muted mb-0 text-center py-3">Aucune entrée blacklist</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="tab-pane fade" id="tab-signalements">
+        <div class="card-dark p-4">
+            {% if signalements %}
+            <table class="table table-dark-custom table-hover align-middle">
+                <thead>
+                    <tr><th>Signaleur</th><th>Signalé</th><th>Motif</th><th>Statut</th><th>Date</th></tr>
+                </thead>
+                <tbody>
+                    {% for s in signalements %}
+                    <tr>
+                        <td>{{ s.signaleur }}</td>
+                        <td>{{ s.signale }}</td>
+                        <td class="small">{{ s.motif }}</td>
+                        <td><span class="badge bg-secondary">{{ s.statut|default:"nouveau" }}</span></td>
+                        <td class="small text-muted">{{ s.date_creation|date:"d/m/Y H:i" }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p class="text-muted mb-0 text-center py-3">Aucun signalement</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const csrfToken = '{{ csrf_token }}';
+
+function deletePost(postId, btn) {
+    if (!confirm('Supprimer ce post et tous ses commentaires ?')) return;
+    fetch(`/moderation/post/${postId}/delete/`, {
+        method: 'POST', headers: {'X-CSRFToken': csrfToken},
+    }).then(r => r.json()).then(() => {
+        document.getElementById(`post-${postId}`).remove();
+    });
+}
+
+function deleteComment(postId, commentId, btn) {
+    if (!confirm('Supprimer ce commentaire et ses réponses ?')) return;
+    fetch(`/moderation/post/${postId}/comment/${commentId}/delete/`, {
+        method: 'POST', headers: {'X-CSRFToken': csrfToken},
+    }).then(r => r.json()).then(() => {
+        document.getElementById(`comment-${commentId}`).remove();
+    });
+}
+
+function deleteMessage(msgId, btn) {
+    if (!confirm('Supprimer ce message ?')) return;
+    fetch(`/moderation/message/${msgId}/delete/`, {
+        method: 'POST', headers: {'X-CSRFToken': csrfToken},
+    }).then(r => r.json()).then(() => {
+        document.getElementById(`msg-${msgId}`).remove();
+    });
+}
+
+function deleteEventComment(commentId) {
+    if (!confirm('Supprimer ce commentaire d\'événement ?')) return;
+    fetch(`/moderation/event-comment/${commentId}/delete/`, {
+        method: 'POST', headers: {'X-CSRFToken': csrfToken},
+    }).then(r => r.json()).then(() => {
+        document.getElementById(`event-comment-${commentId}`).remove();
+    });
+}
+
+function toggleHideEventComment(commentId) {
+    fetch(`/moderation/event-comment/${commentId}/toggle-hide/`, {
+        method: 'POST', headers: {'X-CSRFToken': csrfToken},
+    }).then(r => r.json()).then(data => {
+        if (data.error) { alert(data.error); return; }
+        const el = document.getElementById(`event-comment-${commentId}`);
+        if (data.is_hidden) {
+            el.classList.add('opacity-50');
+        } else {
+            el.classList.remove('opacity-50');
+        }
+    });
+}
+
+function editEventComment(commentId) {
+    const msgEl = document.getElementById(`msg-text-${commentId}`);
+    const current = msgEl.textContent.trim();
+    const newMsg = prompt('Modifier le commentaire :', current);
+    if (newMsg === null || newMsg.trim() === '' || newMsg === current) return;
+    fetch(`/moderation/event-comment/${commentId}/edit/`, {
+        method: 'POST',
+        headers: {'X-CSRFToken': csrfToken, 'Content-Type': 'application/json'},
+        body: JSON.stringify({message: newMsg.trim()}),
+    }).then(r => r.json()).then(data => {
+        if (data.error) { alert(data.error); return; }
+        msgEl.textContent = newMsg.trim();
+    });
+}
+
+function deleteReply(postId, commentId, replyId, btn) {
+    if (!confirm('Supprimer cette réponse ?')) return;
+    fetch(`/moderation/post/${postId}/comment/${commentId}/reply/${replyId}/delete/`, {
+        method: 'POST', headers: {'X-CSRFToken': csrfToken},
+    }).then(r => r.json()).then(() => {
+        document.getElementById(`reply-${replyId}`).remove();
+    });
+}
+
+document.querySelectorAll('.moderate-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+        const pk = this.dataset.pk;
+        const action = this.dataset.action;
+        fetch(`/moderation/photo/${pk}/`, {
+            method: 'POST',
+            headers: {'X-CSRFToken': csrfToken, 'Content-Type': 'application/x-www-form-urlencoded'},
+            body: `action=${action}`,
+        }).then(r => r.json()).then(() => {
+            document.getElementById(`photo-${pk}`).remove();
+        });
+    });
+});
+</script>
+{% endblock %}

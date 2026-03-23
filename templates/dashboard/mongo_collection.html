@@ -1,0 +1,76 @@
+{% extends "dashboard/base.html" %}
+{% block title %}{{ collection_name }} - MeetVoice{% endblock %}
+{% block page_title %}MongoDB: {{ db_key }} / {{ collection_name }} ({{ total }}){% endblock %}
+
+{% block content %}
+<div class="card-dark p-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <a href="{% url 'dashboard:databases' %}" class="btn btn-sm btn-outline-light">
+            <i class="bi bi-arrow-left"></i> Retour
+        </a>
+        <span class="text-muted small">Page {{ page }}/{{ total_pages }}</span>
+    </div>
+
+    {% if documents %}
+    <div class="table-responsive">
+        <table class="table table-dark-custom table-hover table-sm">
+            <thead>
+                <tr>
+                    <th>_id</th>
+                    {% for key in documents.0.keys %}
+                        {% if key != '_id' %}
+                        <th>{{ key }}</th>
+                        {% endif %}
+                    {% endfor %}
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for doc in documents %}
+                <tr>
+                    <td class="small text-muted">{{ doc._id|truncatechars:12 }}</td>
+                    {% for key, val in doc.items %}
+                        {% if key != '_id' %}
+                        <td class="small">{{ val|truncatechars:50 }}</td>
+                        {% endif %}
+                    {% endfor %}
+                    <td>
+                        <button class="btn btn-sm btn-outline-danger delete-doc" data-id="{{ doc._id }}"
+                                onclick="if(confirm('Supprimer?')) deleteDoc('{{ doc._id }}', this)">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <nav class="mt-3">
+        <ul class="pagination pagination-sm justify-content-center">
+            {% if page > 1 %}
+            <li class="page-item"><a class="page-link" href="?page={{ page|add:"-1" }}">&laquo;</a></li>
+            {% endif %}
+            {% if page < total_pages %}
+            <li class="page-item"><a class="page-link" href="?page={{ page|add:"1" }}">&raquo;</a></li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% else %}
+    <p class="text-muted text-center py-3 mb-0">Collection vide</p>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function deleteDoc(docId, btn) {
+    fetch(`/databases/mongo/{{ db_key }}/{{ collection_name }}/${docId}/delete/`, {
+        method: 'POST',
+        headers: {'X-CSRFToken': '{{ csrf_token }}'},
+    })
+    .then(r => r.json())
+    .then(() => btn.closest('tr').remove());
+}
+</script>
+{% endblock %}

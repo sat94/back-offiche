@@ -1,0 +1,146 @@
+{% extends "dashboard/base.html" %}
+{% block title %}Articles - MeetVoice{% endblock %}
+{% block page_title %}Articles{% endblock %}
+
+{% block content %}
+<div class="row g-4 mb-4">
+    <div class="col-md-3">
+        <div class="stat-card d-flex justify-content-between align-items-center">
+            <div>
+                <div class="stat-value">{{ total }}</div>
+                <div class="stat-label">Articles</div>
+            </div>
+            <div class="stat-icon"><i class="bi bi-newspaper"></i></div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card d-flex justify-content-between align-items-center">
+            <div>
+                <div class="stat-value">{{ total_views }}</div>
+                <div class="stat-label">Vues totales</div>
+            </div>
+            <div class="stat-icon"><i class="bi bi-eye"></i></div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card d-flex justify-content-between align-items-center">
+            <div>
+                <div class="stat-value">{{ themes|length }}</div>
+                <div class="stat-label">Thèmes</div>
+            </div>
+            <div class="stat-icon"><i class="bi bi-tags"></i></div>
+        </div>
+    </div>
+</div>
+
+<div class="card-dark p-4">
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <div class="d-flex gap-2 flex-wrap">
+            <form method="get" class="search-bar d-flex gap-2">
+                <input type="text" name="q" value="{{ search }}" placeholder="Rechercher..." class="form-control form-control-sm" style="width: 250px;">
+                {% if theme_filter %}<input type="hidden" name="theme" value="{{ theme_filter }}">{% endif %}
+                <button class="btn btn-sm btn-accent" type="submit"><i class="bi bi-search"></i></button>
+            </form>
+            <div class="dropdown">
+                <button class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">
+                    {% if theme_filter %}{{ theme_filter }}{% else %}Tous les thèmes{% endif %}
+                </button>
+                <ul class="dropdown-menu dropdown-menu-dark">
+                    <li><a class="dropdown-item" href="?q={{ search }}">Tous</a></li>
+                    {% for theme in themes %}
+                    <li><a class="dropdown-item" href="?q={{ search }}&theme={{ theme }}">{{ theme }}</a></li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+        <span class="text-muted small">{{ total }} article{{ total|pluralize }}</span>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-sm table-dark-custom align-middle">
+            <thead>
+                <tr>
+                    <th style="width: 60px;"></th>
+                    <th>
+                        <a href="?q={{ search }}&theme={{ theme_filter }}&sort={% if sort == 'titre' %}-titre{% else %}titre{% endif %}" class="text-decoration-none text-muted">
+                            Titre {% if sort == 'titre' %}<i class="bi bi-caret-up-fill"></i>{% elif sort == '-titre' %}<i class="bi bi-caret-down-fill"></i>{% endif %}
+                        </a>
+                    </th>
+                    <th>Thème</th>
+                    <th>Auteur</th>
+                    <th>
+                        <a href="?q={{ search }}&theme={{ theme_filter }}&sort={% if sort == '-access_count' %}access_count{% else %}-access_count{% endif %}" class="text-decoration-none text-muted">
+                            Vues {% if sort == '-access_count' %}<i class="bi bi-caret-down-fill"></i>{% elif sort == 'access_count' %}<i class="bi bi-caret-up-fill"></i>{% endif %}
+                        </a>
+                    </th>
+                    <th>Lecture</th>
+                    <th>
+                        <a href="?q={{ search }}&theme={{ theme_filter }}&sort={% if sort == '-date_publication' %}date_publication{% else %}-date_publication{% endif %}" class="text-decoration-none text-muted">
+                            Publié {% if sort == '-date_publication' %}<i class="bi bi-caret-down-fill"></i>{% elif sort == 'date_publication' %}<i class="bi bi-caret-up-fill"></i>{% endif %}
+                        </a>
+                    </th>
+                    <th>Statut</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for article in articles %}
+                <tr>
+                    <td>
+                        {% if article.vignette %}
+                        <img src="{{ article.vignette }}" style="width: 50px; height: 35px; object-fit: cover; border-radius: 4px;">
+                        {% elif article.photo %}
+                        <img src="{{ article.photo }}" style="width: 50px; height: 35px; object-fit: cover; border-radius: 4px;">
+                        {% else %}
+                        <div style="width: 50px; height: 35px; background: #2a2a35; border-radius: 4px;" class="d-flex align-items-center justify-content-center">
+                            <i class="bi bi-newspaper text-muted"></i>
+                        </div>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <a href="{% url 'dashboard:article_detail' article.pk %}" class="text-decoration-none text-light fw-semibold">
+                            {{ article.titre|truncatechars:60 }}
+                        </a>
+                        {% if article.sous_titre %}
+                        <div class="text-muted small">{{ article.sous_titre|truncatechars:80 }}</div>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if article.theme %}
+                        <span class="badge rounded-pill" style="background: rgba(108,92,231,.15); color: #a29bfe;">{{ article.theme }}</span>
+                        {% else %}
+                        <span class="text-muted">-</span>
+                        {% endif %}
+                    </td>
+                    <td class="small">{{ article.auteur_full_name|default:"-" }}</td>
+                    <td>
+                        <span class="fw-semibold">{{ article.access_count|default:0 }}</span>
+                    </td>
+                    <td class="small text-muted">{{ article.reading_time|default:"-" }} min</td>
+                    <td class="small text-muted">
+                        {% if article.date_publication %}
+                        {{ article.date_publication|date:"d/m/Y" }}
+                        {% else %}
+                        -
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if article.mis_en_avant %}
+                        <span class="badge bg-warning text-dark"><i class="bi bi-star-fill"></i> Mis en avant</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <form method="post" action="{% url 'dashboard:article_delete' article.pk %}" onsubmit="return confirm('Supprimer cet article ?')">
+                            {% csrf_token %}
+                            <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+                        </form>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="9" class="text-center text-muted py-4">Aucun article</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
