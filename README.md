@@ -1,138 +1,130 @@
-# Back Office - Projet Django
+# Back Office MeetVoice
 
-Projet Django avec double base de données : PostgreSQL et MongoDB
+Back office Django pour la gestion de la plateforme MeetVoice : comptes, moderation, bases de donnees, monitoring, facturation, articles, messagerie et terminal SSH.
 
-## 📋 Structure du projet
+## Pre-requis
 
-### Applications
+- Python 3.12+
+- Une cle SSH ed25519 dont la cle publique est ajoutee sur les serveurs distants
 
-#### 1. **core** (PostgreSQL)
-Gère les données relationnelles :
-- **Abonnement** : Gestion des abonnements utilisateurs
-- **Facture** : Gestion des factures
+## Installation
 
-#### 2. **content** (MongoDB)
-Gère les données NoSQL :
-- **Article** : Gestion des articles de blog
-- **Contact** : Gestion des contacts/demandes
-- **ReseauSocial** : Gestion des réseaux sociaux
-
-## 🗄️ Bases de données
-
-### PostgreSQL
-- Tables : `abonnements`, `factures`
-- Configuration dans `.env`
-
-### MongoDB
-- Collections : `articles`, `contacts`, `reseaux_sociaux`
-- Configuration dans `.env`
-
-## 🚀 Installation
-
-### 1. Activer l'environnement virtuel
 ```powershell
+python -m venv venv
 .\venv\Scripts\Activate.ps1
-```
-
-### 2. Installer les dépendances
-```powershell
 pip install -r requirements.txt
 ```
 
-### 3. Configurer les variables d'environnement
-Modifier le fichier `.env` avec vos paramètres
+## Configuration SSH
 
-### 4. Appliquer les migrations PostgreSQL
+L'application ouvre des tunnels SSH vers les serveurs de bases de donnees et de monitoring au demarrage. Chaque developpeur doit configurer sa propre cle SSH.
+
+### 1. Generer une cle SSH (si vous n'en avez pas)
+
+```powershell
+ssh-keygen -t ed25519 -C "votre_nom"
+```
+
+Cela cree deux fichiers dans `~/.ssh/` :
+- `id_ed25519` (cle privee)
+- `id_ed25519.pub` (cle publique)
+
+### 2. Ajouter la cle publique sur les serveurs
+
+Demander a un administrateur d'ajouter votre cle publique (`id_ed25519.pub`) dans le fichier `~/.ssh/authorized_keys` de chaque serveur, ou utiliser :
+
+```bash
+ssh-copy-id -i ~/.ssh/id_ed25519.pub root@<IP_SERVEUR>
+```
+
+### 3. Configurer le `.env`
+
+Copier le `.env` d'exemple et renseigner votre chemin de cle :
+
+```env
+SSH_KEY_PATH=C:/Users/VOTRE_NOM/.ssh/id_ed25519
+SSH_USER=root
+```
+
+Le chemin par defaut est `~/.ssh/id_ed25519` si non renseigne.
+
+## Variables d'environnement
+
+Creer un fichier `.env` a la racine du projet avec les variables suivantes :
+
+| Variable | Description |
+|---|---|
+| `SECRET_KEY` | Cle secrete Django |
+| `DEBUG` | Mode debug (`True`/`False`) |
+| `ALLOWED_HOSTS` | Hotes autorises (separes par des virgules) |
+| `SSH_KEY_PATH` | Chemin vers la cle privee SSH |
+| `SSH_USER` | Utilisateur SSH (defaut : `root`) |
+| `PG_MAIN_NAME` | Nom de la base PostgreSQL principale |
+| `PG_MAIN_USER` | Utilisateur PostgreSQL |
+| `PG_MAIN_PASSWORD` | Mot de passe PostgreSQL |
+| `AWS_ACCESS_KEY_ID` | Cle AWS pour S3 |
+| `AWS_SECRET_ACCESS_KEY` | Secret AWS pour S3 |
+| `MOLLIE_API_KEY` | Cle API Mollie (paiements) |
+| `SMTP_HOST` | Serveur SMTP |
+| `SMTP_USER` | Utilisateur SMTP |
+| `SMTP_PASSWORD` | Mot de passe SMTP |
+
+## Lancement
+
 ```powershell
 python manage.py migrate
-```
-
-### 5. Créer un superutilisateur
-```powershell
 python manage.py createsuperuser
-```
-
-### 6. Lancer le serveur
-```powershell
 python manage.py runserver
 ```
 
-## 📝 Utilisation
+Acceder au back office : `http://localhost:8000/`
 
-### Modèles PostgreSQL (core)
+## Structure du projet
 
-Accéder à l'admin Django : `http://localhost:8000/admin`
-
-### Modèles MongoDB (content)
-
-Utiliser les classes Python directement :
-
-```python
-from content.models import Article, Contact, ReseauSocial
-
-# Créer un article
-article_id = Article.create_article(
-    titre="Mon article",
-    contenu="Contenu...",
-    auteur="Admin",
-    categorie="tech",
-    tags=["django", "mongodb"]
-)
-
-# Créer un contact
-contact_id = Contact.create_contact(
-    nom="Jean Dupont",
-    email="jean@example.com",
-    message="Bonjour"
-)
-
-# Créer un réseau social
-reseau_id = ReseauSocial.create_reseau(
-    plateforme="twitter",
-    nom_compte="@moncompte",
-    url="https://twitter.com/moncompte"
-)
+```
+back_office/          # Configuration Django, settings, tunnels SSH
+core/                 # Modeles PostgreSQL (abonnements, factures)
+compte/               # Gestion des comptes utilisateurs
+content/              # Modeles PostgreSQL articles + routeur de base
+dashboard/            # Vues principales, URLs, helpers (Mollie, IMAP, SSH, AI, newsletter)
+monitoring/           # Prometheus + Grafana (docker-compose)
+templates/dashboard/  # Templates HTML
+static/               # CSS, JS
 ```
 
-## 📂 Fichiers utiles
+## Applications
 
-- `content/mongo_admin.py` : Exemples d'utilisation des modèles MongoDB
-- `back_office/mongodb.py` : Configuration de la connexion MongoDB
-- `check_db.py` : Script pour vérifier les tables PostgreSQL
-- `fix_migrations.py` : Script pour réinitialiser les migrations
+| App | Base de donnees | Description |
+|---|---|---|
+| `core` | PostgreSQL | Abonnements, factures |
+| `compte` | PostgreSQL | Comptes utilisateurs |
+| `content` | PostgreSQL (articles) | Articles, routeur multi-DB |
+| `dashboard` | PostgreSQL + MongoDB | Interface d'administration |
 
-## 🔧 Commandes utiles
+## Fonctionnalites
+
+- **Comptes** : liste, detail, activation/desactivation, suppression
+- **Moderation** : photos, posts, commentaires, messages, evenements
+- **Bases de donnees** : exploration PostgreSQL et MongoDB
+- **Monitoring** : metriques serveurs via Node Exporter (Prometheus/Grafana)
+- **Facturation** : integration Mollie (abonnements, remboursements)
+- **Articles** : gestion des articles de blog
+- **Mailbox** : lecture/envoi d'emails via IMAP/SMTP
+- **Newsletter** : generation d'images AI et envoi de newsletters
+- **Terminal SSH** : terminal distant avec assistant AI
+- **Contabo** : gestion des VPS (snapshots, reinstallation, mots de passe)
+
+## Docker
 
 ```powershell
-# Créer une nouvelle migration
-python manage.py makemigrations
-
-# Appliquer les migrations
-python manage.py migrate
-
-# Créer un superutilisateur
-python manage.py createsuperuser
-
-# Lancer le serveur
-python manage.py runserver
-
-# Tester les modèles MongoDB
-python content/mongo_admin.py
-
-# Vérifier les tables PostgreSQL
-python check_db.py
+docker build -t back-office .
+docker run -p 8000:8000 --env-file .env back-office
 ```
 
-## 📦 Dépendances principales
+## Tests
 
-- Django 5.2.8
-- psycopg2-binary (PostgreSQL)
-- pymongo (MongoDB)
-- python-decouple (Variables d'environnement)
+```powershell
+python manage.py test
+```
 
-## 🔐 Sécurité
-
-- Ne jamais committer le fichier `.env`
-- Changer la `SECRET_KEY` en production
-- Mettre `DEBUG=False` en production
-
+Ou depuis l'interface : `http://localhost:8000/tests/`
