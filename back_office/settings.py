@@ -9,8 +9,8 @@ import paramiko
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SSH_KEY_PATH = os.environ.get('SSH_KEY_PATH', '/root/.ssh/id_ed25519' if os.name != 'nt' else 'C:/Users/sulta/.ssh/id_ed25519')
-SSH_USER = 'root'
+SSH_KEY_PATH = config('SSH_KEY_PATH', default=os.path.join(os.path.expanduser('~'), '.ssh', 'id_ed25519'))
+SSH_USER = config('SSH_USER', default='root')
 
 _cleanups = []
 _tunnels = {}
