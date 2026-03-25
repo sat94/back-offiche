@@ -315,18 +315,58 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 DATABASE_ROUTERS = ['content.db_router.ArticleRouter']
 
-SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
-CACHES = {
-    'default': {
-        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-        'TIMEOUT': 300,
-        'OPTIONS': {
-            'MAX_ENTRIES': 1000,
-        },
+REDIS_URL = config('REDIS_URL', default='')
+
+_redis_available = False
+if REDIS_URL:
+    try:
+        import redis as _redis_lib
+        _r = _redis_lib.from_url(REDIS_URL, socket_connect_timeout=2)
+        _r.ping()
+        _redis_available = True
+    except Exception:
+        pass
+
+if _redis_available:
+    SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
+    CACHES = {
+        'default': {
+            'BACKEND': 'django_redis.cache.RedisCache',
+            'LOCATION': REDIS_URL,
+            'TIMEOUT': 300,
+            'OPTIONS': {
+                'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+                'SOCKET_CONNECT_TIMEOUT': 5,
+                'SOCKET_TIMEOUT': 5,
+                'COMPRESSOR': 'django_redis.compressors.zlib.ZlibCompressor',
+                'IGNORE_EXCEPTIONS': True,
+            },
+            'KEY_PREFIX': 'bo',
+        }
     }
-}
+else:
+    SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'TIMEOUT': 300,
+            'OPTIONS': {
+                'MAX_ENTRIES': 2000,
+            },
+        }
+    }
 
 DATA_UPLOAD_MAX_MEMORY_SIZE = 10485760
+
+LATE_API_KEY = config('Late', default='')
+
+LINKEDIN_CLIENT_ID = config('LINKEDIN_CLIENT_ID', default='')
+LINKEDIN_CLIENT_SECRET = config('LINKEDIN_CLIENT_SECRET', default='')
+LINKEDIN_ORG_ID = config('LINKEDIN_ORG_ID', default='')
+LINKEDIN_REDIRECT_URI = config('LINKEDIN_REDIRECT_URI', default='http://127.0.0.1:8000/social-analytics/linkedin/callback/')
+
+FACEBOOK_APP_ID = config('FACEBOOK_APP_ID', default='')
+FACEBOOK_APP_SECRET = config('FACEBOOK_APP_SECRET', default='')
 
 LOGIN_URL = 'login'
 LOGIN_REDIRECT_URL = '/'

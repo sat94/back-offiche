@@ -57,4 +57,11 @@ urlpatterns = [
     path('terminal/read/', views.terminal_read, name='terminal_read'),
     path('terminal/ai/chat/', views.terminal_ai_chat, name='terminal_ai_chat'),
     path('terminal/ai/clear/', views.terminal_ai_clear, name='terminal_ai_clear'),
+    path('social-analytics/', views.social_analytics, name='social_analytics'),
+    path('social-analytics/api/', views.social_analytics_api, name='social_analytics_api'),
+    path('social-analytics/linkedin/connect/', views.linkedin_connect, name='linkedin_connect'),
+    path('social-analytics/linkedin/callback/', views.linkedin_callback, name='linkedin_callback'),
+    path('user-tracking/', views.user_tracking, name='user_tracking'),
+    path('user-tracking/api/', views.user_tracking_api, name='user_tracking_api'),
+    path('tracking/event/', views.tracking_event, name='tracking_event'),
 ]

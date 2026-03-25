@@ -119,6 +119,12 @@
             <a href="{% url 'dashboard:contabo' %}" class="{% if request.resolver_match.url_name == 'contabo' %}active{% endif %}">
                 <i class="bi bi-cloud"></i> Contabo VPS
             </a>
+            <a href="{% url 'dashboard:social_analytics' %}" class="{% if 'social_analytics' in request.resolver_match.url_name %}active{% endif %}">
+                <i class="bi bi-bar-chart-line"></i> Social Analytics
+            </a>
+            <a href="{% url 'dashboard:user_tracking' %}" class="{% if 'user_tracking' in request.resolver_match.url_name %}active{% endif %}">
+                <i class="bi bi-cursor"></i> User Tracking
+            </a>
             <a href="{% url 'dashboard:tests' %}" class="{% if request.resolver_match.url_name == 'tests' %}active{% endif %}">
                 <i class="bi bi-bug"></i> Tests
             </a>

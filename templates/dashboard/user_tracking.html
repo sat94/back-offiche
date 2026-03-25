@@ -1,0 +1,585 @@
+{% extends "dashboard/base.html" %}
+{% block title %}User Tracking - MeetVoice{% endblock %}
+{% block page_title %}User Tracking{% endblock %}
+
+{% block extra_css %}
+<style>
+    .funnel-row {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        padding: .65rem 1rem;
+        border-radius: 8px;
+        margin-bottom: .4rem;
+        background: #1a1a24;
+        border: 1px solid #2a2a35;
+        transition: background .15s;
+    }
+    .funnel-row:hover { background: #1f1f2e; }
+    .funnel-step-label {
+        min-width: 240px;
+        font-size: .88rem;
+        color: #c0c0d0;
+        white-space: nowrap;
+    }
+    .funnel-bar-wrap {
+        flex: 1;
+        background: #12121a;
+        border-radius: 6px;
+        height: 18px;
+        overflow: hidden;
+    }
+    .funnel-bar {
+        height: 100%;
+        border-radius: 6px;
+        transition: width .6s ease;
+    }
+    .funnel-stats {
+        min-width: 120px;
+        text-align: right;
+        font-size: .85rem;
+    }
+    .funnel-count { color: #fff; font-weight: 600; }
+    .funnel-pct { color: #8a8a9a; margin-left: .4rem; }
+    .funnel-drop {
+        min-width: 80px;
+        text-align: right;
+        font-size: .8rem;
+    }
+    .drop-ok { color: #8a8a9a; }
+    .drop-warn { color: #ffc107; }
+    .drop-bad { color: #ff4169; }
+
+    .retention-dot {
+        width: 14px; height: 14px;
+        border-radius: 50%;
+        display: inline-block;
+        margin-right: .4rem;
+        flex-shrink: 0;
+    }
+    .field-bar-wrap {
+        flex: 1;
+        background: #12121a;
+        border-radius: 4px;
+        height: 12px;
+        overflow: hidden;
+    }
+    .field-bar { height: 100%; border-radius: 4px; background: var(--accent); transition: width .5s; }
+    .field-row {
+        display: flex;
+        align-items: center;
+        gap: .75rem;
+        padding: .4rem 0;
+        border-bottom: 1px solid #1a1a24;
+    }
+    .field-label { min-width: 160px; font-size: .85rem; color: #c0c0d0; }
+    .field-pct { min-width: 55px; text-align: right; font-size: .82rem; color: #8a8a9a; }
+    .field-count { min-width: 60px; text-align: right; font-size: .82rem; color: #fff; font-weight: 600; }
+
+    .filter-bar select, .filter-bar input {
+        background: #1a1a24;
+        border: 1px solid #2a2a35;
+        color: #e0e0e0;
+        border-radius: 8px;
+        font-size: .85rem;
+    }
+    .filter-bar select:focus, .filter-bar input:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 2px rgba(108,92,231,.2);
+    }
+
+    .recent-avatar {
+        width: 36px; height: 36px;
+        border-radius: 50%;
+        object-fit: cover;
+        background: #2a2a35;
+        border: 1px solid #3a3a4a;
+    }
+    .recent-avatar-placeholder {
+        width: 36px; height: 36px;
+        border-radius: 50%;
+        background: #2a2a35;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: #6a6a7a;
+        font-size: 1rem;
+        flex-shrink: 0;
+    }
+    .badge-premium { background: rgba(255,193,7,.15); color: #ffc107; border-radius: 6px; padding: .2em .5em; font-size: .75rem; font-weight: 600; }
+    .badge-gratuit { background: rgba(138,138,154,.1); color: #8a8a9a; border-radius: 6px; padding: .2em .5em; font-size: .75rem; }
+    .badge-verified { background: rgba(0,210,91,.15); color: #00d25b; border-radius: 6px; padding: .2em .5em; font-size: .75rem; }
+    .section-title { font-size: 1rem; font-weight: 600; color: #fff; margin-bottom: 1rem; }
+    .kpi-val { font-size: 1.9rem; font-weight: 700; color: #fff; line-height: 1; }
+    .kpi-label { font-size: .8rem; color: #8a8a9a; margin-top: .2rem; }
+    .kpi-sub { font-size: .78rem; color: var(--accent-light); margin-top: .15rem; }
+    #loading-overlay {
+        display: none;
+        position: fixed; inset: 0;
+        background: rgba(0,0,0,.4);
+        z-index: 9999;
+        align-items: center;
+        justify-content: center;
+    }
+    #loading-overlay.show { display: flex; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="loading-overlay">
+    <div class="spinner-border text-light" role="status" style="width:3rem;height:3rem;"></div>
+</div>
+
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-4 filter-bar">
+    <div class="d-flex gap-2 align-items-center flex-wrap">
+        <select id="filter-days" class="form-select form-select-sm" style="width:auto;">
+            <option value="7">7 derniers jours</option>
+            <option value="30" selected>30 derniers jours</option>
+            <option value="60">60 derniers jours</option>
+            <option value="90">90 derniers jours</option>
+            <option value="180">6 mois</option>
+            <option value="365">1 an</option>
+        </select>
+        <div class="form-check form-switch mb-0 d-flex align-items-center gap-2 ms-2">
+            <input class="form-check-input" type="checkbox" id="exclude-admin" checked>
+            <label class="form-check-label text-muted small" for="exclude-admin">Exclure admins/staff</label>
+        </div>
+    </div>
+    <button class="btn btn-accent btn-sm" onclick="loadAll()">
+        <i class="bi bi-arrow-clockwise me-1"></i> Rafraîchir
+    </button>
+</div>
+
+<div id="error-banner" class="alert alert-danger d-none mb-4"></div>
+
+<div class="row g-3 mb-4" id="kpi-row">
+    <div class="col-6 col-md-4 col-xl-2">
+        <div class="stat-card">
+            <div class="kpi-val" id="kpi-total">-</div>
+            <div class="kpi-label">Utilisateurs</div>
+            <div class="kpi-sub" id="kpi-new7d">+- /7j</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-4 col-xl-2">
+        <div class="stat-card">
+            <div class="kpi-val" id="kpi-new30d">-</div>
+            <div class="kpi-label">Nouveaux / 30j</div>
+            <div class="kpi-sub" id="kpi-conv30d">-</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-4 col-xl-2">
+        <div class="stat-card">
+            <div class="kpi-val" id="kpi-verified">-</div>
+            <div class="kpi-label">Vérifiés</div>
+            <div class="kpi-sub" id="kpi-verified-pct">-</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-4 col-xl-2">
+        <div class="stat-card">
+            <div class="kpi-val" id="kpi-premium">-</div>
+            <div class="kpi-label">Abonnés premium</div>
+            <div class="kpi-sub" id="kpi-premium-pct">-</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-4 col-xl-2">
+        <div class="stat-card">
+            <div class="kpi-val" id="kpi-withphoto">-</div>
+            <div class="kpi-label">Avec photo</div>
+            <div class="kpi-sub" id="kpi-photo-pct">-</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-4 col-xl-2">
+        <div class="stat-card">
+            <div class="kpi-val" id="kpi-actif7d">-</div>
+            <div class="kpi-label">Actifs 7j</div>
+            <div class="kpi-sub" id="kpi-actif7d-pct">-</div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4 mb-4">
+    <div class="col-12">
+        <div class="card-dark p-4">
+            <div class="section-title"><i class="bi bi-funnel me-2" style="color:var(--accent);"></i>Funnel d'inscription — où les utilisateurs abandonnent</div>
+            <div id="funnel-container">
+                <div class="text-center text-muted py-4"><div class="spinner-border spinner-border-sm me-2"></div>Chargement...</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4 mb-4">
+    <div class="col-12 col-xl-8">
+        <div class="card-dark p-4">
+            <div class="section-title"><i class="bi bi-graph-up me-2" style="color:var(--accent);"></i>Activité — inscriptions &amp; connexions</div>
+            <canvas id="daily-chart" height="100"></canvas>
+        </div>
+    </div>
+    <div class="col-12 col-xl-4">
+        <div class="card-dark p-4">
+            <div class="section-title"><i class="bi bi-arrow-repeat me-2" style="color:var(--accent);"></i>Rétention utilisateurs</div>
+            <canvas id="retention-chart" style="max-height:220px;"></canvas>
+            <div id="retention-legend" class="mt-3" style="font-size:.82rem;"></div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4 mb-4">
+    <div class="col-12 col-xl-6">
+        <div class="card-dark p-4">
+            <div class="section-title"><i class="bi bi-list-check me-2" style="color:var(--accent);"></i>Complétion du profil par champ</div>
+            <div id="fields-container">
+                <div class="text-center text-muted py-4"><div class="spinner-border spinner-border-sm me-2"></div>Chargement...</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-xl-6">
+        <div class="card-dark p-4">
+            <div class="section-title"><i class="bi bi-clock-history me-2" style="color:var(--accent);"></i>Dernières inscriptions</div>
+            <div id="recent-container" style="overflow-x:auto;">
+                <div class="text-center text-muted py-4"><div class="spinner-border spinner-border-sm me-2"></div>Chargement...</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4 mb-4">
+    <div class="col-12 col-xl-6">
+        <div class="card-dark p-4">
+            <div class="section-title"><i class="bi bi-robot me-2" style="color:#ff4169;"></i>Détection de bots — IPs suspectes</div>
+            <div class="text-muted small mb-3">IPs ayant lancé plusieurs tentatives d'inscription sans finaliser (sessions distinctes)</div>
+            <div id="bot-ips-container">
+                <div class="text-center text-muted py-3"><div class="spinner-border spinner-border-sm me-2"></div>Chargement...</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-xl-6">
+        <div class="card-dark p-4">
+            <div class="section-title"><i class="bi bi-person-fill-exclamation me-2" style="color:#ffc107;"></i>Multi-comptes par IP</div>
+            <div class="text-muted small mb-3">IPs ayant créé plusieurs comptes (≥2) — potentiels bots ou faux profils</div>
+            <div id="multi-accounts-container">
+                <div class="text-center text-muted py-3"><div class="spinner-border spinner-border-sm me-2"></div>Chargement...</div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+var dailyChart = null;
+var retentionChart = null;
+
+var FUNNEL_COLORS = [
+    '#6c5ce7','#a29bfe','#74b9ff','#0984e3','#00cec9','#55efc4','#fdcb6e','#e17055','#d63031'
+];
+
+function fmtNum(n) {
+    if (n === null || n === undefined) return '0';
+    if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+    if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
+    return n.toString();
+}
+
+function pct(n, t) {
+    if (!t) return '0%';
+    return (n / t * 100).toFixed(1) + '%';
+}
+
+function getParams() {
+    return new URLSearchParams({
+        days: document.getElementById('filter-days').value,
+        exclude_admin: document.getElementById('exclude-admin').checked ? '1' : '0',
+        section: 'all',
+    });
+}
+
+function showError(msg) {
+    var b = document.getElementById('error-banner');
+    b.textContent = 'Erreur: ' + msg;
+    b.classList.remove('d-none');
+}
+
+function hideError() {
+    document.getElementById('error-banner').classList.add('d-none');
+}
+
+function renderKPIs(stats, retention) {
+    var total = stats.total;
+    document.getElementById('kpi-total').textContent = fmtNum(total);
+    document.getElementById('kpi-new7d').textContent = '+' + fmtNum(stats.new_7d) + ' / 7j';
+    document.getElementById('kpi-new30d').textContent = fmtNum(stats.new_30d);
+    document.getElementById('kpi-conv30d').textContent = total ? pct(stats.new_30d, total) + ' du total' : '-';
+    document.getElementById('kpi-verified').textContent = fmtNum(stats.verified);
+    document.getElementById('kpi-verified-pct').textContent = pct(stats.verified, total) + ' vérifiés';
+    document.getElementById('kpi-premium').textContent = fmtNum(stats.premium);
+    document.getElementById('kpi-premium-pct').textContent = pct(stats.premium, total) + ' premium';
+    document.getElementById('kpi-withphoto').textContent = fmtNum(stats.with_photo);
+    document.getElementById('kpi-photo-pct').textContent = pct(stats.with_photo, total) + ' ont une photo';
+    if (retention) {
+        document.getElementById('kpi-actif7d').textContent = fmtNum(retention.actif_7j);
+        document.getElementById('kpi-actif7d-pct').textContent = pct(retention.actif_7j, total) + ' actifs';
+    }
+}
+
+function renderFunnel(funnel) {
+    var container = document.getElementById('funnel-container');
+    if (!funnel || !funnel.length) {
+        container.innerHTML = '<div class="text-center text-muted py-3">Aucune donnée</div>';
+        return;
+    }
+    var maxCount = funnel[0].count || 1;
+    var html = '';
+    for (var i = 0; i < funnel.length; i++) {
+        var step = funnel[i];
+        var prev = i > 0 ? funnel[i - 1] : null;
+        var barWidth = Math.max(0, Math.min(100, (step.count / maxCount) * 100));
+        var color = FUNNEL_COLORS[i % FUNNEL_COLORS.length];
+
+        var dropHtml = '';
+        if (prev && prev.count > 0) {
+            var dropCount = prev.count - step.count;
+            var dropPct = ((dropCount / prev.count) * 100).toFixed(1);
+            var dropClass = dropPct > 40 ? 'drop-bad' : dropPct > 20 ? 'drop-warn' : 'drop-ok';
+            if (dropCount > 0) {
+                dropHtml = '<span class="funnel-drop ' + dropClass + '">-' + fmtNum(dropCount) + ' (' + dropPct + '%)</span>';
+            } else {
+                dropHtml = '<span class="funnel-drop drop-ok">—</span>';
+            }
+        } else {
+            dropHtml = '<span class="funnel-drop drop-ok"></span>';
+        }
+
+        html += '<div class="funnel-row">' +
+            '<span class="funnel-step-label">' +
+                '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + color + ';margin-right:.5rem;"></span>' +
+                step.step +
+            '</span>' +
+            '<div class="funnel-bar-wrap"><div class="funnel-bar" style="width:' + barWidth + '%;background:' + color + ';"></div></div>' +
+            '<span class="funnel-stats"><span class="funnel-count">' + fmtNum(step.count) + '</span><span class="funnel-pct">' + step.pct + '%</span></span>' +
+            dropHtml +
+        '</div>';
+    }
+    container.innerHTML = html;
+}
+
+function renderDailyChart(signups, logins) {
+    var allDates = {};
+    (signups || []).forEach(function(d) { allDates[d.date] = allDates[d.date] || {}; allDates[d.date].s = d.count; });
+    (logins || []).forEach(function(d) { allDates[d.date] = allDates[d.date] || {}; allDates[d.date].l = d.count; });
+
+    var labels = Object.keys(allDates).sort();
+    var signupData = labels.map(function(d) { return allDates[d].s || 0; });
+    var loginData = labels.map(function(d) { return allDates[d].l || 0; });
+
+    var shortLabels = labels.map(function(d) {
+        var parts = d.split('-');
+        return parts[2] + '/' + parts[1];
+    });
+
+    var ctx = document.getElementById('daily-chart').getContext('2d');
+    if (dailyChart) dailyChart.destroy();
+    dailyChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: shortLabels,
+            datasets: [
+                {
+                    label: 'Nouvelles inscriptions',
+                    data: signupData,
+                    borderColor: '#6c5ce7',
+                    backgroundColor: 'rgba(108,92,231,.1)',
+                    fill: true,
+                    tension: .3,
+                    pointRadius: 3,
+                },
+                {
+                    label: 'Connexions',
+                    data: loginData,
+                    borderColor: '#00cec9',
+                    backgroundColor: 'rgba(0,206,201,.08)',
+                    fill: true,
+                    tension: .3,
+                    pointRadius: 3,
+                },
+            ],
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { labels: { color: '#c0c0d0', font: { size: 12 } } },
+            },
+            scales: {
+                x: { ticks: { color: '#8a8a9a', maxRotation: 45, font: { size: 11 } }, grid: { color: '#1e1e2a' } },
+                y: { ticks: { color: '#8a8a9a', font: { size: 11 } }, grid: { color: '#1e1e2a' } },
+            },
+        },
+    });
+}
+
+function renderRetention(retention) {
+    if (!retention) return;
+    var data = [
+        retention.actif_7j,
+        retention.actif_30j,
+        retention.actif_90j,
+        retention.inactif,
+        retention.jamais_connecte,
+    ];
+    var labels = ['Actifs < 7j', 'Actifs 7-30j', 'Actifs 30-90j', 'Inactifs > 90j', 'Jamais connecté'];
+    var colors = ['#00d25b', '#74b9ff', '#fdcb6e', '#e17055', '#636e72'];
+
+    var ctx = document.getElementById('retention-chart').getContext('2d');
+    if (retentionChart) retentionChart.destroy();
+    retentionChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: data,
+                backgroundColor: colors,
+                borderColor: '#0f0f13',
+                borderWidth: 2,
+            }],
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { display: false },
+                tooltip: { callbacks: { label: function(c) { return c.label + ': ' + fmtNum(c.raw); } } },
+            },
+        },
+    });
+
+    var total = data.reduce(function(a, b) { return a + b; }, 0);
+    var legend = document.getElementById('retention-legend');
+    legend.innerHTML = labels.map(function(l, i) {
+        var p = total ? ((data[i] / total) * 100).toFixed(1) : 0;
+        return '<div class="d-flex align-items-center justify-content-between mb-1">' +
+            '<span><span class="retention-dot" style="background:' + colors[i] + ';"></span>' + l + '</span>' +
+            '<span style="color:#fff;font-weight:600;">' + fmtNum(data[i]) + ' <span style="color:#8a8a9a;font-weight:400;">(' + p + '%)</span></span>' +
+        '</div>';
+    }).join('');
+}
+
+function renderFields(fields) {
+    var container = document.getElementById('fields-container');
+    if (!fields || !fields.length) {
+        container.innerHTML = '<div class="text-muted text-center py-3">Aucune donnée</div>';
+        return;
+    }
+    var html = '';
+    fields.forEach(function(f) {
+        var w = Math.max(0, Math.min(100, f.pct));
+        var color = f.pct >= 70 ? '#00d25b' : f.pct >= 40 ? '#fdcb6e' : '#e17055';
+        html += '<div class="field-row">' +
+            '<span class="field-label">' + f.field + '</span>' +
+            '<div class="field-bar-wrap"><div class="field-bar" style="width:' + w + '%;background:' + color + ';"></div></div>' +
+            '<span class="field-pct">' + f.pct + '%</span>' +
+            '<span class="field-count">' + fmtNum(f.count) + '</span>' +
+        '</div>';
+    });
+    container.innerHTML = html;
+}
+
+function renderRecent(recent) {
+    var container = document.getElementById('recent-container');
+    if (!recent || !recent.length) {
+        container.innerHTML = '<div class="text-muted text-center py-3">Aucune donnée</div>';
+        return;
+    }
+    var rows = recent.map(function(u) {
+        var avatar = u.avatar
+            ? '<img src="' + u.avatar + '" class="recent-avatar me-2" alt="" onerror="this.style.display=\'none\'">'
+            : '<span class="recent-avatar-placeholder me-2"><i class="bi bi-person"></i></span>';
+        var sub = u.abonnement && u.abonnement !== 'gratuit'
+            ? '<span class="badge-premium">' + u.abonnement + '</span>'
+            : '<span class="badge-gratuit">gratuit</span>';
+        var ver = u.is_verified
+            ? '<span class="badge-verified ms-1"><i class="bi bi-check-circle-fill"></i></span>'
+            : '';
+        var loginCell = u.last_login
+            ? '<span class="text-muted" style="font-size:.8rem;">' + u.last_login + '</span>'
+            : '<span class="text-muted" style="font-size:.8rem;font-style:italic;">Jamais</span>';
+        return '<tr>' +
+            '<td class="py-2"><div class="d-flex align-items-center">' + avatar +
+                '<div><div style="font-size:.85rem;color:#fff;">' + (u.username || '-') + ver + '</div>' +
+                '<div style="font-size:.75rem;color:#8a8a9a;">' + (u.email || '') + '</div></div></div></td>' +
+            '<td class="py-2"><span style="font-size:.8rem;color:#c0c0d0;">' + (u.sexe || '-') + '</span></td>' +
+            '<td class="py-2"><span style="font-size:.8rem;color:#c0c0d0;">' + (u.ville || '-') + '</span></td>' +
+            '<td class="py-2">' + sub + '</td>' +
+            '<td class="py-2"><span style="font-size:.8rem;color:#8a8a9a;">' + (u.created_at || '-') + '</span></td>' +
+            '<td class="py-2">' + loginCell + '</td>' +
+        '</tr>';
+    }).join('');
+
+    container.innerHTML = '<table class="table table-dark-custom table-sm" style="--bs-table-bg:transparent;--bs-table-border-color:#2a2a35;">' +
+        '<thead><tr style="font-size:.78rem;color:#8a8a9a;">' +
+            '<th>Utilisateur</th><th>Sexe</th><th>Ville</th><th>Abonnement</th><th>Inscription</th><th>Dernière connexion</th>' +
+        '</tr></thead><tbody>' + rows + '</tbody></table>';
+}
+
+function renderBots(botIps, multiAccounts) {
+    var botContainer = document.getElementById('bot-ips-container');
+    if (!botIps || !botIps.length) {
+        botContainer.innerHTML = '<div class="text-center py-3" style="color:#636e72;font-size:.85rem;"><i class="bi bi-shield-check me-1"></i>Aucun bot détecté</div>';
+    } else {
+        var rows = botIps.map(function(b) {
+            var danger = b.sessions >= 10 ? '#ff4169' : b.sessions >= 5 ? '#ffc107' : '#8a8a9a';
+            return '<div class="d-flex align-items-center justify-content-between py-2" style="border-bottom:1px solid #1a1a24;">' +
+                '<code style="color:#74b9ff;font-size:.82rem;">' + b.ip + '</code>' +
+                '<span style="color:' + danger + ';font-weight:600;font-size:.88rem;">' + b.sessions + ' sessions</span>' +
+            '</div>';
+        }).join('');
+        botContainer.innerHTML = rows;
+    }
+
+    var maContainer = document.getElementById('multi-accounts-container');
+    if (!multiAccounts || !multiAccounts.length) {
+        maContainer.innerHTML = '<div class="text-center py-3" style="color:#636e72;font-size:.85rem;"><i class="bi bi-shield-check me-1"></i>Aucun multi-compte détecté</div>';
+    } else {
+        var maRows = multiAccounts.map(function(m) {
+            var danger = m.comptes >= 5 ? '#ff4169' : m.comptes >= 3 ? '#ffc107' : '#8a8a9a';
+            return '<div class="d-flex align-items-center justify-content-between py-2" style="border-bottom:1px solid #1a1a24;">' +
+                '<code style="color:#74b9ff;font-size:.82rem;">' + m.ip + '</code>' +
+                '<span style="color:' + danger + ';font-weight:600;font-size:.88rem;">' + m.comptes + ' comptes</span>' +
+            '</div>';
+        }).join('');
+        maContainer.innerHTML = maRows;
+    }
+}
+
+function loadAll() {
+    hideError();
+    var overlay = document.getElementById('loading-overlay');
+    overlay.classList.add('show');
+
+    var params = getParams();
+    fetch('{% url "dashboard:user_tracking_api" %}?' + params.toString())
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            overlay.classList.remove('show');
+            if (data.error) { showError(data.error); return; }
+
+            if (data.stats && data.retention) renderKPIs(data.stats, data.retention);
+            if (data.funnel) renderFunnel(data.funnel);
+            if (data.daily_signups !== undefined) renderDailyChart(data.daily_signups, data.daily_logins);
+            if (data.retention) renderRetention(data.retention);
+            if (data.field_completion) renderFields(data.field_completion);
+            if (data.recent) renderRecent(data.recent);
+            renderBots(data.bot_ips || [], data.ip_multi_accounts || []);
+        })
+        .catch(function(err) {
+            overlay.classList.remove('show');
+            showError(err.message);
+        });
+}
+
+document.getElementById('filter-days').addEventListener('change', loadAll);
+document.getElementById('exclude-admin').addEventListener('change', loadAll);
+
+document.addEventListener('DOMContentLoaded', function() {
+    setTimeout(loadAll, 100);
+});
+</script>
+{% endblock %}

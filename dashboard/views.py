@@ -2,6 +2,7 @@ import json
 import subprocess
 import sys
 import time
+import requests as http_requests
 from datetime import datetime, timedelta
 from functools import wraps
 from dateutil import parser as dateutil_parser
@@ -23,9 +24,11 @@ from django.db.models.functions import TruncDate, TruncMonth
 from django.http import JsonResponse
 from django.shortcuts import render, get_object_or_404, redirect
 from django.views.decorators.http import require_POST
+from django.views.decorators.csrf import csrf_exempt
 from django.contrib import messages as django_messages
 from django.utils import timezone
 
+from core.models import UserEvent
 from compte.models import (
     Compte, Photo, PhotoComment, ProfileComment, VideoComment,
     CompteLike, CompteProfileVue, CompteBlacklist,
@@ -1424,3 +1427,329 @@ def newsletter_preview_recipients(request):
         count = 0
         sample = []
     return JsonResponse({'count': count, 'sample': sample})
+
+
+@login_required
+def social_analytics(request):
+    from . import linkedin_helper
+    return render(request, 'dashboard/social_analytics.html', {
+        'linkedin_connected': linkedin_helper.is_token_valid(),
+    })
+
+
+LATE_API_BASE = 'https://zernio.com/api/v1'
+
+
+def _late_headers():
+    from django.conf import settings
+    return {'Authorization': f'Bearer {settings.LATE_API_KEY}'}
+
+
+@login_required
+def social_analytics_api(request):
+    platform = request.GET.get('platform', 'all')
+    sort_by = request.GET.get('sortBy', 'date')
+    order = request.GET.get('order', 'desc')
+    page = request.GET.get('page', '1')
+    limit = request.GET.get('limit', '20')
+    from_date = request.GET.get('fromDate', '')
+    to_date = request.GET.get('toDate', '')
+
+    params = {
+        'platform': platform,
+        'sortBy': sort_by,
+        'order': order,
+        'page': page,
+        'limit': limit,
+    }
+    if from_date:
+        params['fromDate'] = from_date
+    if to_date:
+        params['toDate'] = to_date
+
+    _sa_key = f'social_analytics_{platform}_{sort_by}_{order}_{page}_{limit}_{from_date}_{to_date}'
+    _sa_cached = cache.get(_sa_key)
+    if _sa_cached is not None:
+        return JsonResponse(_sa_cached, safe=False)
+
+    try:
+        r = http_requests.get(
+            f'{LATE_API_BASE}/analytics',
+            headers=_late_headers(),
+            params=params,
+            timeout=15,
+        )
+        r.raise_for_status()
+        data = r.json()
+        cache.set(_sa_key, data, 120)
+        return JsonResponse(data, safe=False)
+    except http_requests.RequestException as e:
+        return JsonResponse({'error': str(e)}, status=502)
+
+
+def _cors_response(response):
+    response['Access-Control-Allow-Origin'] = '*'
+    response['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
+    response['Access-Control-Allow-Headers'] = 'Content-Type'
+    return response
+
+
+@csrf_exempt
+def tracking_event(request):
+    if request.method == 'OPTIONS':
+        return _cors_response(JsonResponse({}))
+    if request.method != 'POST':
+        return _cors_response(JsonResponse({'error': 'POST only'}, status=405))
+    try:
+        body = json.loads(request.body)
+        ip = (
+            request.META.get('HTTP_X_FORWARDED_FOR', '').split(',')[0].strip()
+            or request.META.get('REMOTE_ADDR')
+            or None
+        )
+        UserEvent.objects.create(
+            session_id=body.get('session_id', '')[:64],
+            ip_address=ip or None,
+            user_agent=(request.META.get('HTTP_USER_AGENT', '') or '')[:500],
+            event_type=body.get('event_type', 'registration_step')[:50],
+            step=body.get('step'),
+            step_name=(body.get('step_name', '') or '')[:100],
+            data={k: v for k, v in body.items() if k not in ('session_id', 'event_type', 'step', 'step_name')},
+            compte_id=(str(body.get('compte_id', '')) or None),
+        )
+        return _cors_response(JsonResponse({'ok': True}))
+    except Exception as e:
+        return _cors_response(JsonResponse({'error': str(e)}, status=400))
+
+
+@login_required
+def user_tracking(request):
+    return render(request, 'dashboard/user_tracking.html', {})
+
+
+@login_required
+def user_tracking_api(request):
+    section = request.GET.get('section', 'all')
+    days = int(request.GET.get('days', '30'))
+    exclude_admin = request.GET.get('exclude_admin', '1') == '1'
+
+    _cache_key = f'user_tracking_{section}_{days}_{int(exclude_admin)}'
+    _cached = cache.get(_cache_key)
+    if _cached is not None:
+        return JsonResponse(_cached)
+
+    now = timezone.now()
+    since = now - timedelta(days=days)
+
+    try:
+        qs = Compte.objects.all()
+        if exclude_admin:
+            qs = qs.filter(is_admin=False, is_staff=False)
+
+        total = qs.count()
+        result = {}
+
+        if section in ('all', 'stats'):
+            d7 = now - timedelta(days=7)
+            d30 = now - timedelta(days=30)
+            result['stats'] = {
+                'total': total,
+                'new_7d': qs.filter(created_at__gte=d7).count(),
+                'new_30d': qs.filter(created_at__gte=d30).count(),
+                'verified': qs.filter(is_verified=True).count(),
+                'premium': qs.exclude(abonnement='gratuit').exclude(abonnement__isnull=True).count(),
+                'with_photo': qs.filter(avatar__isnull=False).exclude(avatar='').count(),
+            }
+
+        if section in ('all', 'funnel'):
+            STEPS = [
+                (1, 'type', 'Choix du type (Amour/Amitié/Libertin)'),
+                (2, 'sexe', 'Question : Sexe'),
+                (3, 'age', 'Question : Âge'),
+                (4, 'cgu', 'CGU + Localisation GPS'),
+                (5, 'username', 'Question : Pseudo'),
+                (6, 'photo', 'Question : Photo'),
+                (7, 'email', 'Email + Vérification'),
+                (8, 'complete', 'Compte créé ✓'),
+            ]
+
+            event_qs = UserEvent.objects.filter(created_at__gte=since)
+            total_sessions = event_qs.values('session_id').distinct().count()
+
+            step_counts = {}
+            for item in event_qs.filter(event_type__in=['registration_step', 'registration_complete']).values('step').annotate(n=Count('session_id', distinct=True)):
+                step_counts[item['step']] = item['n']
+
+            complete_count = event_qs.filter(event_type='registration_complete').values('session_id').distinct().count()
+            step_counts[8] = complete_count
+
+            funnel_steps = []
+            base = total_sessions or 1
+            for step_num, step_id, step_label in STEPS:
+                count = step_counts.get(step_num, 0)
+                funnel_steps.append({
+                    'step': step_label,
+                    'count': count,
+                    'pct': round(count / base * 100, 1) if base else 0,
+                })
+
+            has_real_data = total_sessions > 0
+
+            if not has_real_data:
+                has_photo = qs.filter(avatar__isnull=False).exclude(avatar='').count()
+                verified = qs.filter(is_verified=True).count()
+                premium = qs.exclude(abonnement='gratuit').exclude(abonnement__isnull=True).count()
+
+                def pct(n):
+                    return round(n / total * 100, 1) if total else 0
+
+                funnel_steps = [
+                    {'step': '① Choix type (Amour/Amitié/Libertin)', 'count': total, 'pct': 100},
+                    {'step': '② Sexe', 'count': total, 'pct': 100},
+                    {'step': '③ Âge', 'count': total, 'pct': 100},
+                    {'step': '④ CGU + Localisation', 'count': qs.filter(cgu=True).count(), 'pct': pct(qs.filter(cgu=True).count())},
+                    {'step': '⑤ Pseudo', 'count': qs.filter(cgu=True).count(), 'pct': pct(qs.filter(cgu=True).count())},
+                    {'step': '⑥ Photo', 'count': has_photo, 'pct': pct(has_photo)},
+                    {'step': '⑦ Email + Vérification', 'count': total, 'pct': 100},
+                    {'step': '⑧ Compte créé ✓', 'count': total, 'pct': 100},
+                ]
+
+            result['funnel'] = funnel_steps
+            result['funnel_real_data'] = has_real_data
+
+        if section in ('all', 'bots'):
+            from django.db.models import Count as DbCount
+            suspicious_ips = list(
+                Compte.objects.values('email')
+                .annotate(n=DbCount('id'))
+                .filter(n__gte=1)[:1]
+            )
+            bot_ips = list(
+                UserEvent.objects.filter(created_at__gte=since, ip_address__isnull=False)
+                .values('ip_address')
+                .annotate(sessions=Count('session_id', distinct=True))
+                .filter(sessions__gte=3)
+                .order_by('-sessions')[:20]
+            )
+            result['bot_ips'] = [{'ip': b['ip_address'], 'sessions': b['sessions']} for b in bot_ips]
+
+            ip_accounts = list(
+                UserEvent.objects.filter(event_type='registration_complete', ip_address__isnull=False)
+                .values('ip_address')
+                .annotate(comptes=Count('compte_id', distinct=True))
+                .filter(comptes__gte=2)
+                .order_by('-comptes')[:20]
+            )
+            result['ip_multi_accounts'] = [{'ip': x['ip_address'], 'comptes': x['comptes']} for x in ip_accounts]
+
+        if section in ('all', 'daily'):
+            daily_signups = list(
+                qs.filter(created_at__gte=since)
+                .annotate(date=TruncDate('created_at'))
+                .values('date')
+                .annotate(count=Count('id'))
+                .order_by('date')
+            )
+            daily_logins = list(
+                qs.filter(last_login__gte=since)
+                .annotate(date=TruncDate('last_login'))
+                .values('date')
+                .annotate(count=Count('id'))
+                .order_by('date')
+            )
+            result['daily_signups'] = [
+                {'date': d['date'].strftime('%Y-%m-%d'), 'count': d['count']}
+                for d in daily_signups
+            ]
+            result['daily_logins'] = [
+                {'date': d['date'].strftime('%Y-%m-%d'), 'count': d['count']}
+                for d in daily_logins
+            ]
+
+        if section in ('all', 'retention'):
+            d7 = now - timedelta(days=7)
+            d30 = now - timedelta(days=30)
+            d90 = now - timedelta(days=90)
+            result['retention'] = {
+                'actif_7j': qs.filter(last_login__gte=d7).count(),
+                'actif_30j': qs.filter(last_login__gte=d30, last_login__lt=d7).count(),
+                'actif_90j': qs.filter(last_login__gte=d90, last_login__lt=d30).count(),
+                'inactif': qs.filter(last_login__lt=d90).count(),
+                'jamais_connecte': qs.filter(last_login__isnull=True).count(),
+            }
+
+        if section in ('all', 'fields'):
+            fields_data = [
+                ('Photo', qs.filter(avatar__isnull=False).exclude(avatar='').count()),
+                ('Bio', qs.filter(bio__isnull=False).exclude(bio='').count()),
+                ('Ville', qs.filter(ville__isnull=False).exclude(ville='').count()),
+                ('Téléphone', qs.filter(numberPhone__isnull=False).exclude(numberPhone='').count()),
+                ('Date de naissance', qs.filter(date_de_naissance__isnull=False).count()),
+                ('Audio', qs.filter(audio__isnull=False).exclude(audio='').count()),
+                ('Localisation GPS', qs.filter(latitude__isnull=False).count()),
+                ('Taille', qs.filter(taille__isnull=False).count()),
+                ('Recherche', qs.filter(recherche__isnull=False).exclude(recherche='').count()),
+                ('Métier', qs.filter(metier__isnull=False).exclude(metier='').count()),
+                ('Religion', qs.filter(religion__isnull=False).exclude(religion='').count()),
+                ('Éducation', qs.filter(education__isnull=False).exclude(education='').count()),
+            ]
+            result['field_completion'] = [
+                {'field': f, 'count': c, 'pct': round(c / total * 100, 1) if total else 0}
+                for f, c in sorted(fields_data, key=lambda x: x[1], reverse=True)
+            ]
+
+        if section in ('all', 'recent'):
+            recent = list(
+                qs.order_by('-created_at')[:20].values(
+                    'id', 'username', 'email', 'sexe', 'ville',
+                    'created_at', 'last_login', 'is_verified',
+                    'abonnement', 'avatar',
+                )
+            )
+            for r in recent:
+                r['id'] = str(r['id'])
+                if r['created_at']:
+                    r['created_at'] = r['created_at'].strftime('%Y-%m-%d %H:%M')
+                if r['last_login']:
+                    r['last_login'] = r['last_login'].strftime('%Y-%m-%d %H:%M')
+            result['recent'] = recent
+
+        cache.set(_cache_key, result, 300)
+        return JsonResponse(result)
+
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@login_required
+def linkedin_connect(request):
+    from . import linkedin_helper
+    from django.conf import settings
+    redirect_uri = settings.LINKEDIN_REDIRECT_URI
+    auth_url = linkedin_helper.get_auth_url(redirect_uri)
+    from django.shortcuts import redirect as django_redirect
+    return django_redirect(auth_url)
+
+
+@login_required
+def linkedin_callback(request):
+    from . import linkedin_helper
+    from django.conf import settings
+    from django.shortcuts import redirect as django_redirect
+    error = request.GET.get('error')
+    if error:
+        return render(request, 'dashboard/social_analytics.html', {
+            'linkedin_connected': False,
+            'linkedin_error': request.GET.get('error_description', error),
+        })
+    code = request.GET.get('code', '')
+    redirect_uri = settings.LINKEDIN_REDIRECT_URI
+    try:
+        token_data = linkedin_helper.exchange_code_for_token(code, redirect_uri)
+        linkedin_helper.save_token(token_data)
+    except Exception as e:
+        return render(request, 'dashboard/social_analytics.html', {
+            'linkedin_connected': False,
+            'linkedin_error': str(e),
+        })
+    return django_redirect('/social-analytics/')

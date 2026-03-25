@@ -42,3 +42,5 @@ tzdata==2025.2
 urllib3==2.6.3
 yarl==1.22.0
 gunicorn==23.0.0
+django-redis==6.0.0
+redis==5.0.1

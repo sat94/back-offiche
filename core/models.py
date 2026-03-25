@@ -1,6 +1,31 @@
 from django.db import models
 
 
+class UserEvent(models.Model):
+    SESSION_TYPES = [
+        ('registration_step', 'Étape inscription'),
+        ('registration_complete', 'Inscription terminée'),
+        ('registration_abandon', 'Abandon inscription'),
+        ('page_view', 'Vue de page'),
+    ]
+    session_id = models.CharField(max_length=64, db_index=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True, db_index=True)
+    user_agent = models.CharField(max_length=500, null=True, blank=True)
+    event_type = models.CharField(max_length=50, choices=SESSION_TYPES, db_index=True)
+    step = models.IntegerField(null=True, blank=True, db_index=True)
+    step_name = models.CharField(max_length=100, null=True, blank=True)
+    data = models.JSONField(default=dict, blank=True)
+    compte_id = models.CharField(max_length=36, null=True, blank=True, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        db_table = 'tracking_user_event'
+        managed = True
+
+    def __str__(self):
+        return f"{self.event_type} | {self.session_id[:8]} | step={self.step}"
+
+
 class Detail(models.Model):
     detail_id = models.BigAutoField(primary_key=True)
     nom = models.CharField(max_length=255, unique=True)
