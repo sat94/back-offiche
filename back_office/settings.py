@@ -275,6 +275,9 @@ DATABASES = {
         'PORT': str(PG_LOCAL_PORT),
         'CONN_MAX_AGE': 600,
         'CONN_HEALTH_CHECKS': True,
+        'TEST': {
+            'NAME': config('PG_MAIN_NAME', default='meetvoice_api'),
+        },
     },
     'articles': {
         'ENGINE': 'django.db.backends.postgresql',

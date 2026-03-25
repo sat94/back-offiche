@@ -695,7 +695,7 @@ def run_tests_api(request):
     project_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     try:
         result = subprocess.run(
-            [sys.executable, 'manage.py', 'test', 'dashboard', '-v', '2', '--no-input'],
+            [sys.executable, 'manage.py', 'test', 'dashboard', '-v', '2', '--no-input', '--keepdb'],
             capture_output=True, text=True, timeout=120,
             cwd=project_dir,
         )
