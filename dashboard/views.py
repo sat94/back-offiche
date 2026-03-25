@@ -694,9 +694,17 @@ def run_tests_api(request):
     import os
     project_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     try:
+        test_label = request.GET.get('suite', 'all')
+        if test_label == 'perf':
+            labels = ['dashboard.tests_perf']
+        elif test_label == 'unit':
+            labels = ['dashboard.tests']
+        else:
+            labels = ['dashboard.tests', 'dashboard.tests_perf']
+
         result = subprocess.run(
-            [sys.executable, 'manage.py', 'test', 'dashboard', '-v', '2', '--no-input', '--keepdb'],
-            capture_output=True, text=True, timeout=120,
+            [sys.executable, 'manage.py', 'test', *labels, '-v', '2', '--no-input', '--keepdb'],
+            capture_output=True, text=True, timeout=300,
             cwd=project_dir,
         )
     except Exception as e:
