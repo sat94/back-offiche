@@ -18,7 +18,7 @@ def _parse_date(val):
 
 from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
-from django.db import connections
+from django.db import connections, models
 from django.db.models import Count, Q
 from django.db.models.functions import TruncDate, TruncMonth
 from django.http import JsonResponse
@@ -28,7 +28,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.contrib import messages as django_messages
 from django.utils import timezone
 
-from core.models import UserEvent
+from core.models import UserEvent, PageView
 from compte.models import (
     Compte, Photo, PhotoComment, ProfileComment, VideoComment,
     CompteLike, CompteProfileVue, CompteBlacklist,
@@ -1550,7 +1550,7 @@ def user_tracking_api(request):
     since = now - timedelta(days=days)
 
     try:
-        qs = Compte.objects.all()
+        qs = Compte.objects.exclude(email__endswith='@meet-voice-test.fr')
         if exclude_admin:
             qs = qs.filter(is_admin=False, is_staff=False)
 
@@ -1722,6 +1722,192 @@ def user_tracking_api(request):
                     r['last_login'] = r['last_login'].strftime('%Y-%m-%d %H:%M')
             result['recent'] = recent
 
+        if section in ('all', 'site'):
+            _flush_pageviews()
+            all_pv = PageView.objects.filter(created_at__gte=since)
+
+            raw_anon_qs = all_pv.filter(user_id='')
+            auth_qs = all_pv.exclude(user_id='')
+
+            registered_ips = set(
+                auth_qs.values_list('ip_address', flat=True).distinct()
+            )
+            ip_to_user = {}
+            for row in auth_qs.values('ip_address', 'user_id', 'username').distinct():
+                ip_to_user[row['ip_address']] = {
+                    'user_id': row['user_id'],
+                    'username': row['username'],
+                }
+
+            anon_qs = raw_anon_qs.exclude(ip_address__in=registered_ips)
+            converted_anon_qs = raw_anon_qs.filter(ip_address__in=registered_ips)
+
+            def _build_daily(qs):
+                from django.db.models.functions import TruncDate
+                rows = list(
+                    qs.annotate(date=TruncDate('created_at'))
+                    .values('date')
+                    .annotate(views=Count('id'), unique=Count('ip_address', distinct=True))
+                    .order_by('date')
+                )
+                for r in rows:
+                    r['date'] = r['date'].strftime('%Y-%m-%d')
+                return rows
+
+            def _build_devices(qs):
+                return list(
+                    qs.exclude(device_type='')
+                    .values('device_type')
+                    .annotate(count=Count('id'))
+                    .order_by('-count')
+                )
+
+            def _build_top_pages(qs):
+                return list(
+                    qs.values('path')
+                    .annotate(views=Count('id'), unique=Count('ip_address', distinct=True))
+                    .order_by('-views')[:20]
+                )
+
+            def _build_referrers(qs):
+                return list(
+                    qs.exclude(referrer='')
+                    .values('referrer')
+                    .annotate(count=Count('id'))
+                    .order_by('-count')[:20]
+                )
+
+            def _build_hourly(qs):
+                from django.db.models.functions import ExtractHour
+                return list(
+                    qs.annotate(hour=ExtractHour('created_at'))
+                    .values('hour')
+                    .annotate(count=Count('id'))
+                    .order_by('hour')
+                )
+
+            from django.db import connections
+            _cursor = connections['default'].cursor()
+            step_labels = [
+                (1, 'Choix du type (Amour/Amitié/Libertin)'),
+                (2, 'Question : Sexe'),
+                (3, 'Question : Âge'),
+                (4, 'CGU + Localisation GPS'),
+                (5, 'Question : Pseudo'),
+                (6, 'Question : Photo'),
+                (7, 'Email + Vérification'),
+            ]
+            _cursor.execute(
+                "SELECT step, COUNT(DISTINCT session_id) FROM tracking_user_event "
+                "WHERE event_type='registration_step' AND created_at >= %s "
+                "GROUP BY step ORDER BY step",
+                [since]
+            )
+            step_counts = {r[0]: r[1] for r in _cursor.fetchall()}
+
+            _cursor.execute(
+                "SELECT COUNT(*) FROM compte_compte WHERE created_at >= %s AND email NOT LIKE '%%@meet-voice-test.fr'",
+                [since]
+            )
+            created_count = _cursor.fetchone()[0]
+
+            first_step_count = step_counts.get(1, 0) or 1
+            anon_funnel = []
+            for step_num, label in step_labels:
+                c = step_counts.get(step_num, 0)
+                anon_funnel.append({
+                    'step': label,
+                    'count': c,
+                    'pct': round(c / first_step_count * 100, 1) if first_step_count else 0,
+                })
+            anon_funnel.append({
+                'step': 'Compte créé ✓',
+                'count': created_count,
+                'pct': round(created_count / first_step_count * 100, 1) if first_step_count else 0,
+            })
+            result['anon_funnel'] = anon_funnel
+
+            anon_ip_rows = list(
+                anon_qs.values('ip_address')
+                .annotate(views=Count('id'), first_seen=models.Min('created_at'), last_seen=models.Max('created_at'))
+                .order_by('-last_seen')[:100]
+            )
+            anon_visitors = []
+            for ip_row in anon_ip_rows:
+                ip = ip_row['ip_address']
+                pages = list(
+                    anon_qs.filter(ip_address=ip)
+                    .order_by('created_at')
+                    .values('path', 'created_at', 'referrer', 'device_type')[:50]
+                )
+                for p in pages:
+                    p['created_at'] = p['created_at'].strftime('%Y-%m-%d %H:%M')
+                anon_visitors.append({
+                    'ip': ip,
+                    'views': ip_row['views'],
+                    'first_seen': ip_row['first_seen'].strftime('%Y-%m-%d %H:%M'),
+                    'last_seen': ip_row['last_seen'].strftime('%Y-%m-%d %H:%M'),
+                    'pages': pages,
+                })
+            result['anon_visitors'] = anon_visitors
+            result['anon_stats'] = {
+                'total_views': anon_qs.count(),
+                'unique_ips': anon_qs.values('ip_address').distinct().count(),
+                'today_views': anon_qs.filter(created_at__date=now.date()).count(),
+                'today_unique': anon_qs.filter(created_at__date=now.date()).values('ip_address').distinct().count(),
+            }
+            result['anon_daily'] = _build_daily(anon_qs)
+            result['anon_devices'] = _build_devices(anon_qs)
+            result['anon_top_pages'] = _build_top_pages(anon_qs)
+            result['anon_referrers'] = _build_referrers(anon_qs)
+
+            auth_users = list(
+                auth_qs.values('user_id', 'username')
+                .annotate(views=Count('id'), first_seen=models.Min('created_at'), last_seen=models.Max('created_at'))
+                .order_by('-last_seen')[:100]
+            )
+            auth_visitors = []
+            for u_row in auth_users:
+                uid = u_row['user_id']
+                user_ips = set(
+                    auth_qs.filter(user_id=uid).values_list('ip_address', flat=True).distinct()
+                )
+                anon_pages = list(
+                    converted_anon_qs.filter(ip_address__in=user_ips)
+                    .order_by('created_at')
+                    .values('path', 'created_at', 'ip_address', 'device_type')[:30]
+                )
+                auth_pages = list(
+                    auth_qs.filter(user_id=uid)
+                    .order_by('created_at')
+                    .values('path', 'created_at', 'ip_address', 'device_type')[:50]
+                )
+                all_pages = anon_pages + auth_pages
+                all_pages.sort(key=lambda x: x['created_at'])
+                for i_p, p in enumerate(all_pages):
+                    p['created_at'] = p['created_at'].strftime('%Y-%m-%d %H:%M')
+                    if i_p < len(anon_pages):
+                        p['anon'] = True
+                auth_visitors.append({
+                    'user_id': uid,
+                    'username': u_row['username'],
+                    'views': len(all_pages),
+                    'first_seen': u_row['first_seen'].strftime('%Y-%m-%d %H:%M'),
+                    'last_seen': u_row['last_seen'].strftime('%Y-%m-%d %H:%M'),
+                    'pages': all_pages[:80],
+                })
+            result['auth_visitors'] = auth_visitors
+            result['auth_stats'] = {
+                'total_views': auth_qs.count(),
+                'unique_users': auth_qs.values('user_id').distinct().count(),
+                'today_views': auth_qs.filter(created_at__date=now.date()).count(),
+                'today_unique': auth_qs.filter(created_at__date=now.date()).values('user_id').distinct().count(),
+            }
+            result['auth_daily'] = _build_daily(auth_qs)
+            result['auth_devices'] = _build_devices(auth_qs)
+            result['auth_top_pages'] = _build_top_pages(auth_qs)
+            result['auth_hourly'] = _build_hourly(auth_qs)
+
         cache.set(_cache_key, result, 300)
         return JsonResponse(result)
 
@@ -1761,3 +1947,181 @@ def linkedin_callback(request):
             'linkedin_error': str(e),
         })
     return django_redirect('/social-analytics/')
+
+
+REDIS_BUFFER_KEY = 'pv_buffer'
+REDIS_FLUSH_SIZE = 50
+
+
+def _detect_device(ua):
+    ua_lower = (ua or '').lower()
+    if any(k in ua_lower for k in ('mobile', 'android', 'iphone', 'ipad', 'ipod')):
+        if 'ipad' in ua_lower or 'tablet' in ua_lower:
+            return 'tablet'
+        return 'mobile'
+    if any(k in ua_lower for k in ('bot', 'crawl', 'spider', 'slurp', 'facebook', 'twitter')):
+        return 'bot'
+    return 'desktop'
+
+
+def _flush_pageviews():
+    try:
+        import redis as _redis_lib
+        from django.conf import settings as _s
+        r = _redis_lib.from_url(_s.REDIS_URL, decode_responses=True)
+        items = r.lrange(REDIS_BUFFER_KEY, 0, -1)
+        if not items:
+            return
+        r.delete(REDIS_BUFFER_KEY)
+        objs = []
+        for raw in items:
+            d = json.loads(raw)
+            objs.append(PageView(
+                ip_address=d['ip'],
+                path=d['path'],
+                referrer=d.get('ref', ''),
+                user_agent=d.get('ua', ''),
+                device_type=d.get('dev', ''),
+                user_id=d.get('uid', ''),
+                username=d.get('uname', ''),
+            ))
+        PageView.objects.bulk_create(objs, ignore_conflicts=True)
+    except Exception:
+        pass
+
+
+@csrf_exempt
+def tracking_pageview(request):
+    if request.method == 'OPTIONS':
+        return _cors_response(JsonResponse({}))
+    if request.method != 'POST':
+        return _cors_response(JsonResponse({'error': 'POST only'}, status=405))
+    try:
+        body = json.loads(request.body)
+        ip = (
+            request.META.get('HTTP_X_FORWARDED_FOR', '').split(',')[0].strip()
+            or request.META.get('REMOTE_ADDR')
+            or None
+        )
+        if not ip:
+            return _cors_response(JsonResponse({'error': 'no ip'}, status=400))
+
+        ua = (request.META.get('HTTP_USER_AGENT', '') or '')[:500]
+        entry = json.dumps({
+            'ip': ip,
+            'path': (body.get('path', '/') or '/')[:500],
+            'ref': (body.get('referrer', '') or '')[:1000],
+            'ua': ua,
+            'dev': _detect_device(ua),
+            'uid': (str(body.get('user_id', '')) or '')[:64],
+            'uname': (str(body.get('username', '')) or '')[:150],
+        })
+
+        try:
+            import redis as _redis_lib
+            from django.conf import settings as _s
+            r = _redis_lib.from_url(_s.REDIS_URL, decode_responses=True)
+            length = r.rpush(REDIS_BUFFER_KEY, entry)
+            if length >= REDIS_FLUSH_SIZE:
+                _flush_pageviews()
+        except Exception:
+            d = json.loads(entry)
+            PageView.objects.create(
+                ip_address=d['ip'],
+                path=d['path'],
+                referrer=d.get('ref', ''),
+                user_agent=d.get('ua', ''),
+                device_type=d.get('dev', ''),
+                user_id=d.get('uid', ''),
+                username=d.get('uname', ''),
+            )
+
+        return _cors_response(JsonResponse({'ok': True}))
+    except Exception as e:
+        return _cors_response(JsonResponse({'error': str(e)}, status=400))
+
+
+@login_required
+def site_tracking(request):
+    return render(request, 'dashboard/site_tracking.html', {})
+
+
+@login_required
+def site_tracking_api(request):
+    days = int(request.GET.get('days', '30'))
+    _cache_key = f'site_tracking_{days}'
+    _cached = cache.get(_cache_key)
+    if _cached is not None:
+        return JsonResponse(_cached)
+
+    _flush_pageviews()
+
+    now = timezone.now()
+    since = now - timedelta(days=days)
+    qs = PageView.objects.filter(created_at__gte=since)
+
+    try:
+        result = {}
+
+        total_views = qs.count()
+        unique_ips = qs.values('ip_address').distinct().count()
+
+        result['stats'] = {
+            'total_views': total_views,
+            'unique_visitors': unique_ips,
+            'today_views': qs.filter(created_at__date=now.date()).count(),
+            'today_unique': qs.filter(created_at__date=now.date()).values('ip_address').distinct().count(),
+        }
+
+        pages = list(
+            qs.values('path')
+            .annotate(views=Count('id'), unique=Count('ip_address', distinct=True))
+            .order_by('-views')[:50]
+        )
+        result['pages'] = pages
+
+        daily = list(
+            qs.annotate(date=TruncDate('created_at'))
+            .values('date')
+            .annotate(views=Count('id'), unique=Count('ip_address', distinct=True))
+            .order_by('date')
+        )
+        result['daily'] = [
+            {'date': d['date'].strftime('%Y-%m-%d'), 'views': d['views'], 'unique': d['unique']}
+            for d in daily
+        ]
+
+        devices = list(
+            qs.exclude(device_type='').values('device_type')
+            .annotate(count=Count('id'))
+            .order_by('-count')
+        )
+        result['devices'] = devices
+
+        top_ips = list(
+            qs.values('ip_address')
+            .annotate(views=Count('id'), pages=Count('path', distinct=True))
+            .order_by('-views')[:30]
+        )
+        result['top_ips'] = top_ips
+
+        top_referrers = list(
+            qs.exclude(referrer='').exclude(referrer__contains='meet-voice.fr')
+            .values('referrer')
+            .annotate(count=Count('id'))
+            .order_by('-count')[:20]
+        )
+        result['referrers'] = top_referrers
+
+        hourly = list(
+            qs.extra(select={'hour': "EXTRACT(HOUR FROM created_at)"})
+            .values('hour')
+            .annotate(count=Count('id'))
+            .order_by('hour')
+        )
+        result['hourly'] = [{'hour': int(h['hour']), 'count': h['count']} for h in hourly]
+
+        cache.set(_cache_key, result, 120)
+        return JsonResponse(result)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)

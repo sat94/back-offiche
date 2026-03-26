@@ -64,4 +64,5 @@ urlpatterns = [
     path('user-tracking/', views.user_tracking, name='user_tracking'),
     path('user-tracking/api/', views.user_tracking_api, name='user_tracking_api'),
     path('tracking/event/', views.tracking_event, name='tracking_event'),
+    path('tracking/pageview/', views.tracking_pageview, name='tracking_pageview'),
 ]

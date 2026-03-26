@@ -128,9 +128,6 @@
             <a href="{% url 'dashboard:tests' %}" class="{% if request.resolver_match.url_name == 'tests' %}active{% endif %}">
                 <i class="bi bi-bug"></i> Tests
             </a>
-            <a href="{% url 'admin:index' %}">
-                <i class="bi bi-gear"></i> Django Admin
-            </a>
         </div>
         <div class="sidebar-footer text-muted">
             <i class="bi bi-person-circle"></i> {{ request.user.username }}

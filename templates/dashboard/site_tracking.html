@@ -1,0 +1,279 @@
+{% extends "dashboard/base.html" %}
+{% block title %}Site Tracking - MeetVoice{% endblock %}
+{% block page_title %}Site Tracking — meet-voice.fr{% endblock %}
+
+{% block extra_css %}
+<style>
+    .st-card{background:#13131d;border:1px solid #2a2a35;border-radius:12px;padding:1.2rem 1.5rem;}
+    .st-val{font-size:1.9rem;font-weight:700;color:#fff;line-height:1;}
+    .st-label{font-size:.8rem;color:#8a8a9a;margin-top:.2rem;}
+    .st-sub{font-size:.78rem;color:var(--accent-light,#a29bfe);margin-top:.15rem;}
+    .page-row{display:flex;align-items:center;gap:.75rem;padding:.55rem .8rem;border-radius:8px;margin-bottom:.3rem;background:#1a1a24;border:1px solid #2a2a35;transition:background .15s;}
+    .page-row:hover{background:#1f1f2e;}
+    .page-path{flex:1;font-size:.85rem;color:#e0e0e0;word-break:break-all;}
+    .page-bar-wrap{width:200px;background:#12121a;border-radius:4px;height:10px;overflow:hidden;}
+    .page-bar{height:100%;border-radius:4px;background:var(--accent,#6c5ce7);transition:width .5s;}
+    .page-stats{min-width:140px;text-align:right;font-size:.82rem;}
+    .page-views{color:#fff;font-weight:600;}
+    .page-unique{color:#8a8a9a;margin-left:.5rem;}
+    .ip-row{display:flex;align-items:center;gap:.75rem;padding:.45rem .8rem;border-bottom:1px solid #1a1a24;font-size:.83rem;}
+    .ip-addr{font-family:monospace;color:#e0e0e0;min-width:140px;}
+    .ip-views{color:#fff;font-weight:600;min-width:60px;text-align:right;}
+    .ip-pages{color:#8a8a9a;min-width:60px;text-align:right;}
+    .ref-row{display:flex;align-items:center;gap:.75rem;padding:.45rem .8rem;border-bottom:1px solid #1a1a24;font-size:.83rem;}
+    .ref-url{flex:1;color:#74b9ff;word-break:break-all;}
+    .ref-count{color:#fff;font-weight:600;min-width:50px;text-align:right;}
+    .section-title{font-size:1rem;font-weight:600;color:#fff;margin-bottom:1rem;}
+    .device-dot{width:12px;height:12px;border-radius:50%;display:inline-block;margin-right:.4rem;}
+    .filter-bar select{background:#1a1a24;border:1px solid #2a2a35;color:#e0e0e0;border-radius:8px;font-size:.85rem;}
+    .filter-bar select:focus{border-color:var(--accent);box-shadow:0 0 0 2px rgba(108,92,231,.2);}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-4 filter-bar">
+    <div class="d-flex gap-2 align-items-center">
+        <select id="filter-days" class="form-select form-select-sm" style="width:auto;">
+            <option value="1">Aujourd'hui</option>
+            <option value="7">7 jours</option>
+            <option value="30" selected>30 jours</option>
+            <option value="90">90 jours</option>
+            <option value="365">1 an</option>
+        </select>
+    </div>
+    <button class="btn btn-accent btn-sm" onclick="loadData()">
+        <i class="bi bi-arrow-clockwise me-1"></i> Rafraichir
+    </button>
+</div>
+
+<div id="error-banner" class="alert alert-danger d-none mb-4"></div>
+
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+        <div class="st-card">
+            <div class="st-val" id="kpi-views">-</div>
+            <div class="st-label">Pages vues</div>
+            <div class="st-sub" id="kpi-views-sub"></div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="st-card">
+            <div class="st-val" id="kpi-unique">-</div>
+            <div class="st-label">Visiteurs uniques</div>
+            <div class="st-sub" id="kpi-unique-sub"></div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="st-card">
+            <div class="st-val" id="kpi-today-views">-</div>
+            <div class="st-label">Vues aujourd'hui</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="st-card">
+            <div class="st-val" id="kpi-today-unique">-</div>
+            <div class="st-label">Uniques aujourd'hui</div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4 mb-4">
+    <div class="col-12">
+        <div class="st-card">
+            <div class="section-title"><i class="bi bi-graph-up me-2" style="color:var(--accent);"></i>Trafic quotidien</div>
+            <canvas id="daily-chart" height="90"></canvas>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4 mb-4">
+    <div class="col-12 col-xl-8">
+        <div class="st-card">
+            <div class="section-title"><i class="bi bi-file-earmark-text me-2" style="color:var(--accent);"></i>Pages les plus visitees</div>
+            <div id="pages-container"><div class="text-center text-muted py-4"><div class="spinner-border spinner-border-sm me-2"></div>Chargement...</div></div>
+        </div>
+    </div>
+    <div class="col-12 col-xl-4">
+        <div class="st-card">
+            <div class="section-title"><i class="bi bi-phone me-2" style="color:var(--accent);"></i>Appareils</div>
+            <canvas id="device-chart" style="max-height:220px;"></canvas>
+            <div id="device-legend" class="mt-3" style="font-size:.82rem;"></div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4 mb-4">
+    <div class="col-12 col-xl-6">
+        <div class="st-card">
+            <div class="section-title"><i class="bi bi-pc-display me-2" style="color:#74b9ff;"></i>Top IPs visiteurs</div>
+            <div id="ips-container" style="max-height:400px;overflow-y:auto;">
+                <div class="text-center text-muted py-4"><div class="spinner-border spinner-border-sm me-2"></div>Chargement...</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-xl-6">
+        <div class="st-card">
+            <div class="section-title"><i class="bi bi-link-45deg me-2" style="color:#fdcb6e;"></i>Sources de trafic (referrers)</div>
+            <div id="referrers-container" style="max-height:400px;overflow-y:auto;">
+                <div class="text-center text-muted py-4"><div class="spinner-border spinner-border-sm me-2"></div>Chargement...</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4 mb-4">
+    <div class="col-12">
+        <div class="st-card">
+            <div class="section-title"><i class="bi bi-clock me-2" style="color:#00cec9;"></i>Repartition horaire</div>
+            <canvas id="hourly-chart" height="80"></canvas>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+var dailyChart = null, deviceChart = null, hourlyChart = null;
+
+function fmtNum(n) {
+    if (n >= 1000000) return (n/1000000).toFixed(1)+'M';
+    if (n >= 1000) return (n/1000).toFixed(1)+'K';
+    return n.toString();
+}
+
+function loadData() {
+    var days = document.getElementById('filter-days').value;
+    document.getElementById('error-banner').classList.add('d-none');
+
+    fetch('/site-tracking/api/?days=' + days)
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.error) {
+                document.getElementById('error-banner').textContent = data.error;
+                document.getElementById('error-banner').classList.remove('d-none');
+                return;
+            }
+            renderStats(data.stats);
+            renderDaily(data.daily);
+            renderPages(data.pages);
+            renderDevices(data.devices);
+            renderIPs(data.top_ips);
+            renderReferrers(data.referrers);
+            renderHourly(data.hourly);
+        })
+        .catch(function(e) {
+            document.getElementById('error-banner').textContent = e.message;
+            document.getElementById('error-banner').classList.remove('d-none');
+        });
+}
+
+function renderStats(s) {
+    document.getElementById('kpi-views').textContent = fmtNum(s.total_views);
+    document.getElementById('kpi-unique').textContent = fmtNum(s.unique_visitors);
+    document.getElementById('kpi-today-views').textContent = fmtNum(s.today_views);
+    document.getElementById('kpi-today-unique').textContent = fmtNum(s.today_unique);
+    if (s.unique_visitors > 0) {
+        document.getElementById('kpi-views-sub').textContent = (s.total_views / s.unique_visitors).toFixed(1) + ' pages/visiteur';
+    }
+}
+
+function renderDaily(daily) {
+    var labels = daily.map(function(d) { var p=d.date.split('-'); return p[2]+'/'+p[1]; });
+    var views = daily.map(function(d) { return d.views; });
+    var unique = daily.map(function(d) { return d.unique; });
+
+    var ctx = document.getElementById('daily-chart').getContext('2d');
+    if (dailyChart) dailyChart.destroy();
+    dailyChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [
+                { label: 'Pages vues', data: views, borderColor: '#6c5ce7', backgroundColor: 'rgba(108,92,231,.1)', fill: true, tension: .3, pointRadius: 2 },
+                { label: 'Visiteurs uniques', data: unique, borderColor: '#00cec9', backgroundColor: 'rgba(0,206,201,.08)', fill: true, tension: .3, pointRadius: 2 }
+            ]
+        },
+        options: { responsive: true, plugins: { legend: { labels: { color: '#c0c0d0', font: { size: 12 } } } }, scales: { x: { ticks: { color: '#6a6a7a', maxRotation: 45 }, grid: { color: '#1a1a24' } }, y: { beginAtZero: true, ticks: { color: '#6a6a7a' }, grid: { color: '#1a1a24' } } } }
+    });
+}
+
+function renderPages(pages) {
+    var c = document.getElementById('pages-container');
+    if (!pages || !pages.length) { c.innerHTML = '<div class="text-center text-muted py-3">Aucune donnee</div>'; return; }
+    var maxViews = pages[0].views || 1;
+    var html = '';
+    for (var i = 0; i < pages.length; i++) {
+        var p = pages[i];
+        var w = Math.max(2, (p.views / maxViews) * 100);
+        html += '<div class="page-row">' +
+            '<span class="page-path">' + p.path + '</span>' +
+            '<div class="page-bar-wrap"><div class="page-bar" style="width:'+w+'%"></div></div>' +
+            '<span class="page-stats"><span class="page-views">'+fmtNum(p.views)+'</span><span class="page-unique">'+fmtNum(p.unique)+' uniq</span></span>' +
+        '</div>';
+    }
+    c.innerHTML = html;
+}
+
+function renderDevices(devices) {
+    var colors = { desktop: '#6c5ce7', mobile: '#00cec9', tablet: '#fdcb6e', bot: '#ff4169' };
+    var labels = devices.map(function(d) { return d.device_type; });
+    var counts = devices.map(function(d) { return d.count; });
+    var bg = labels.map(function(l) { return colors[l] || '#8a8a9a'; });
+
+    var ctx = document.getElementById('device-chart').getContext('2d');
+    if (deviceChart) deviceChart.destroy();
+    deviceChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: { labels: labels, datasets: [{ data: counts, backgroundColor: bg, borderWidth: 0 }] },
+        options: { responsive: true, plugins: { legend: { display: false } } }
+    });
+
+    var total = counts.reduce(function(a,b){return a+b;}, 0) || 1;
+    var legend = '';
+    for (var i = 0; i < labels.length; i++) {
+        var pct = (counts[i]/total*100).toFixed(1);
+        legend += '<div class="d-flex align-items-center gap-2 mb-1"><span class="device-dot" style="background:'+bg[i]+'"></span><span style="color:#c0c0d0">'+labels[i]+'</span><span style="color:#8a8a9a;margin-left:auto">'+pct+'% ('+fmtNum(counts[i])+')</span></div>';
+    }
+    document.getElementById('device-legend').innerHTML = legend;
+}
+
+function renderIPs(ips) {
+    var c = document.getElementById('ips-container');
+    if (!ips || !ips.length) { c.innerHTML = '<div class="text-center text-muted py-3">Aucune donnee</div>'; return; }
+    var html = '<div class="ip-row" style="border-bottom:2px solid #2a2a35;font-weight:600;color:#8a8a9a;"><span class="ip-addr">IP</span><span class="ip-views">Vues</span><span class="ip-pages">Pages</span></div>';
+    for (var i = 0; i < ips.length; i++) {
+        html += '<div class="ip-row"><span class="ip-addr">'+ips[i].ip_address+'</span><span class="ip-views">'+ips[i].views+'</span><span class="ip-pages">'+ips[i].pages+'</span></div>';
+    }
+    c.innerHTML = html;
+}
+
+function renderReferrers(refs) {
+    var c = document.getElementById('referrers-container');
+    if (!refs || !refs.length) { c.innerHTML = '<div class="text-center text-muted py-3">Aucun referrer externe</div>'; return; }
+    var html = '';
+    for (var i = 0; i < refs.length; i++) {
+        html += '<div class="ref-row"><span class="ref-url">'+refs[i].referrer+'</span><span class="ref-count">'+refs[i].count+'</span></div>';
+    }
+    c.innerHTML = html;
+}
+
+function renderHourly(hourly) {
+    var labels = []; var counts = [];
+    for (var h = 0; h < 24; h++) {
+        labels.push(h+'h');
+        var found = hourly.find(function(x){return x.hour===h;});
+        counts.push(found ? found.count : 0);
+    }
+    var ctx = document.getElementById('hourly-chart').getContext('2d');
+    if (hourlyChart) hourlyChart.destroy();
+    hourlyChart = new Chart(ctx, {
+        type: 'bar',
+        data: { labels: labels, datasets: [{ label: 'Visites', data: counts, backgroundColor: 'rgba(0,206,201,.6)', borderRadius: 4 }] },
+        options: { responsive: true, plugins: { legend: { display: false } }, scales: { x: { ticks: { color: '#6a6a7a' }, grid: { display: false } }, y: { beginAtZero: true, ticks: { color: '#6a6a7a' }, grid: { color: '#1a1a24' } } } }
+    });
+}
+
+document.getElementById('filter-days').addEventListener('change', loadData);
+loadData();
+</script>
+{% endblock %}

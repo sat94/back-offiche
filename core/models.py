@@ -26,6 +26,30 @@ class UserEvent(models.Model):
         return f"{self.event_type} | {self.session_id[:8]} | step={self.step}"
 
 
+class PageView(models.Model):
+    ip_address = models.GenericIPAddressField(db_index=True)
+    path = models.CharField(max_length=500, db_index=True)
+    referrer = models.CharField(max_length=1000, blank=True, default='')
+    user_agent = models.CharField(max_length=500, blank=True, default='')
+    country = models.CharField(max_length=100, blank=True, default='')
+    city = models.CharField(max_length=100, blank=True, default='')
+    device_type = models.CharField(max_length=20, blank=True, default='')
+    user_id = models.CharField(max_length=64, blank=True, default='', db_index=True)
+    username = models.CharField(max_length=150, blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        db_table = 'tracking_page_view'
+        managed = True
+        indexes = [
+            models.Index(fields=['path', 'created_at']),
+            models.Index(fields=['ip_address', 'created_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.ip_address} -> {self.path} @ {self.created_at}"
+
+
 class Detail(models.Model):
     detail_id = models.BigAutoField(primary_key=True)
     nom = models.CharField(max_length=255, unique=True)

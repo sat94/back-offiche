@@ -201,6 +201,7 @@ _NE_SERVERS = [
     ('messagerie', 'Messagerie', '62.171.162.229', 'root'),
     ('websocket', 'WebSocket', '167.86.82.111', 'sulta'),
     ('gateway', 'Gateway', '89.117.49.9', 'root'),
+    ('back_office', 'Back Office', '144.91.110.197', 'root'),
 ]
 
 MONITORING_TARGETS = {}
@@ -312,6 +313,7 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_DIRS = [BASE_DIR / 'static']
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
