@@ -64,7 +64,6 @@
     .ai-actions .btn-skip { color: #636e72; border-color: #636e72; }
     .ai-actions .btn-skip:hover { background: rgba(99,110,114,.15); }
     .ansible-section { margin-top: .5rem; padding-top: .5rem; border-top: 1px solid #2a2a35; }
-    .ansible-section .small.text-muted { margin-bottom: .3rem; }
     .ansible-btn {
         display: block; width: 100%; text-align: left; padding: .4rem .8rem;
         background: #12121a; border: 1px solid #2a2a35; border-radius: 6px;
@@ -72,17 +71,12 @@
         transition: all .15s;
     }
     .ansible-btn:hover { border-color: #00b4d8; color: #fff; }
-    .ansible-btn.running { border-color: #ffc107; color: #ffc107; pointer-events: none; }
+    .ansible-btn.active-view { border-color: #00b4d8; color: #00b4d8; background: rgba(0,180,216,.05); }
     .ansible-btn i { margin-right: .3rem; }
-    .ansible-output {
-        background: #0a0a0f; border: 1px solid #2a2a35; border-radius: 8px;
-        padding: .8rem; font-family: 'JetBrains Mono', monospace; font-size: .7rem;
-        color: #c0c0c0; white-space: pre-wrap; word-break: break-all;
-        max-height: 300px; overflow-y: auto; margin-top: .5rem; display: none;
+    .semaphore-frame {
+        width: 100%; border: 1px solid #2a2a35; border-radius: 12px;
+        background: #0f0f13; height: 100%;
     }
-    .ansible-output.visible { display: block; }
-    .ansible-output .ok { color: #00d25b; }
-    .ansible-output .err { color: #ff4169; }
 </style>
 {% endblock %}
 
@@ -97,25 +91,15 @@
         </button>
         {% endfor %}
         <div class="ansible-section">
-            <div class="small text-muted"><i class="bi bi-gear-wide-connected"></i> Ansible</div>
-            <button class="ansible-btn" onclick="runAnsible('')" id="ansible-btn-all">
-                <i class="bi bi-play-fill"></i> Tout (site.yml)
+            <div class="small text-muted mb-1"><i class="bi bi-gear-wide-connected"></i> Ansible</div>
+            <button class="ansible-btn" onclick="showSemaphore()" id="ansible-btn-semaphore-ui">
+                <i class="bi bi-ui-checks-grid"></i> Semaphore UI
             </button>
-            <button class="ansible-btn" onclick="runAnsible('self_healing')" id="ansible-btn-self_healing">
-                <i class="bi bi-heart-pulse"></i> Self-Healing
-            </button>
-            <button class="ansible-btn" onclick="runAnsible('certbot')" id="ansible-btn-certbot">
-                <i class="bi bi-lock"></i> Certbot TLS
-            </button>
-            <button class="ansible-btn" onclick="runAnsible('semaphore')" id="ansible-btn-semaphore">
-                <i class="bi bi-ui-checks-grid"></i> Semaphore
-            </button>
-            <div class="ansible-output" id="ansible-output"></div>
         </div>
     </div>
 
     <div class="term-main">
-        <div class="terminal-box">
+        <div class="terminal-box" id="terminal-panel">
             <div class="term-header">
                 <span class="term-title" id="term-title">Aucun serveur sélectionné</span>
                 <div class="d-flex gap-2 align-items-center">
@@ -151,6 +135,7 @@
                 <input type="text" class="term-input" id="term-input" placeholder="Tapez une commande..." autofocus>
             </div>
         </div>
+        <iframe id="semaphore-panel" class="semaphore-frame" src="" frameborder="0" style="display: none;"></iframe>
     </div>
 </div>
 {% endblock %}
@@ -191,7 +176,7 @@ function toggleAiMode() {
     input.focus();
 }
 
-function selectServer(key) {
+function _selectServer(key) {
     document.querySelectorAll('.srv-btn').forEach(b => {
         if (!b.classList.contains('connected')) b.style.borderColor = '#2a2a35';
     });
@@ -536,43 +521,27 @@ window.addEventListener('beforeunload', function() {
     }
 });
 
-function runAnsible(tags) {
-    const btnId = tags ? `ansible-btn-${tags}` : 'ansible-btn-all';
-    const btn = document.getElementById(btnId);
-    const out = document.getElementById('ansible-output');
-    const origHtml = btn.innerHTML;
+let semaphoreVisible = false;
+function showSemaphore() {
+    const termPanel = document.getElementById('terminal-panel');
+    const semPanel = document.getElementById('semaphore-panel');
+    const btn = document.getElementById('ansible-btn-semaphore-ui');
+    semaphoreVisible = !semaphoreVisible;
+    if (semaphoreVisible) {
+        termPanel.style.display = 'none';
+        semPanel.style.display = 'block';
+        if (!semPanel.src || semPanel.src === location.href) semPanel.src = '/semaphore/';
+        btn.classList.add('active-view');
+    } else {
+        termPanel.style.display = 'flex';
+        semPanel.style.display = 'none';
+        btn.classList.remove('active-view');
+    }
+}
 
-    btn.classList.add('running');
-    btn.innerHTML = '<i class="bi bi-hourglass-split"></i> En cours...';
-    out.classList.add('visible');
-    out.textContent = 'Exécution du playbook...\n';
-
-    fetch("{% url 'dashboard:ansible_run' %}", {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
-        body: JSON.stringify({tags: tags}),
-    })
-    .then(r => r.json())
-    .then(data => {
-        btn.classList.remove('running');
-        btn.innerHTML = origHtml;
-        if (data.error) {
-            out.innerHTML = `<span class="err">Erreur: ${data.error}</span>\n${data.output || ''}`;
-        } else {
-            const colored = data.output
-                .replace(/ok=/g, '<span class="ok">ok=</span>')
-                .replace(/failed=/g, '<span class="err">failed=</span>')
-                .replace(/PLAY \[/g, '<span class="ok">PLAY [</span>')
-                .replace(/TASK \[/g, '<span style="color:#a29bfe">TASK [</span>');
-            out.innerHTML = colored;
-        }
-        out.scrollTop = out.scrollHeight;
-    })
-    .catch(e => {
-        btn.classList.remove('running');
-        btn.innerHTML = origHtml;
-        out.innerHTML = `<span class="err">Erreur: ${e}</span>`;
-    });
+function selectServer(key) {
+    if (semaphoreVisible) showSemaphore();
+    _selectServer(key);
 }
 </script>
 {% endblock %}

@@ -22,149 +22,169 @@
     .info-table td { padding: .3rem .5rem; font-size: .8rem; border-color: #2a2a35; }
     .info-table .label { color: #8a8a9a; }
     .refresh-indicator { font-size: .75rem; color: #666; }
-    .services-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+    .services-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: .8rem; margin-bottom: 1.5rem; }
     .service-card {
-        background: #1a1a24; border: 1px solid #2a2a35; border-radius: 12px;
-        padding: 1.2rem; display: flex; align-items: center; gap: 1rem; transition: border-color .15s;
+        background: #1a1a24; border: 1px solid #2a2a35; border-radius: 10px;
+        padding: .8rem 1rem; display: flex; align-items: center; gap: .8rem;
+        cursor: pointer; transition: border-color .15s;
     }
     .service-card:hover { border-color: var(--accent); }
-    .service-card .svc-icon { font-size: 1.8rem; width: 44px; text-align: center; }
-    .service-card .svc-info { flex: 1; }
-    .service-card .svc-name { font-weight: 600; font-size: .9rem; color: #fff; }
-    .service-card .svc-version { font-size: .7rem; color: #666; }
-    .service-card .svc-status { font-size: .75rem; margin-top: .2rem; }
-    .service-card a.svc-link {
-        font-size: .7rem; color: var(--accent-light); text-decoration: none;
-        display: inline-block; margin-top: .3rem;
+    .service-card .svc-icon { font-size: 1.4rem; width: 36px; text-align: center; }
+    .service-card .svc-name { font-weight: 600; font-size: .8rem; color: #fff; }
+    .service-card .svc-status { font-size: .7rem; margin-top: .1rem; }
+    .mon-tabs { display: flex; gap: .5rem; margin-bottom: 1rem; flex-wrap: wrap; }
+    .mon-tab {
+        padding: .5rem 1.2rem; border-radius: 8px; font-size: .8rem; font-weight: 500;
+        background: #1a1a24; border: 1px solid #2a2a35; color: #8a8a9a;
+        cursor: pointer; transition: all .15s;
     }
-    .service-card a.svc-link:hover { text-decoration: underline; }
+    .mon-tab:hover { border-color: var(--accent); color: #fff; }
+    .mon-tab.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .mon-panel { display: none; }
+    .mon-panel.active { display: block; }
+    .embed-frame {
+        width: 100%; border: 1px solid #2a2a35; border-radius: 12px;
+        background: #0f0f13; min-height: calc(100vh - 320px);
+    }
 </style>
 {% endblock %}
 
 {% block content %}
-<h6 class="text-muted mb-3"><i class="bi bi-gear"></i> Services Monitoring</h6>
 <div class="services-grid" id="services-grid">
     <div class="service-card" id="svc-grafana">
         <div class="svc-icon" style="color: #f46800;"><i class="bi bi-bar-chart-fill"></i></div>
-        <div class="svc-info">
+        <div>
             <div class="svc-name">Grafana</div>
             <div class="svc-status" id="svc-status-grafana"><span class="status-dot"></span> ...</div>
-            <a class="svc-link" href="http://173.249.47.92:3000/" target="_blank"><i class="bi bi-box-arrow-up-right"></i> Ouvrir</a>
         </div>
     </div>
     <div class="service-card" id="svc-prometheus">
         <div class="svc-icon" style="color: #e6522c;"><i class="bi bi-fire"></i></div>
-        <div class="svc-info">
+        <div>
             <div class="svc-name">Prometheus</div>
             <div class="svc-status" id="svc-status-prometheus"><span class="status-dot"></span> ...</div>
-            <a class="svc-link" href="http://173.249.47.92:9090/" target="_blank"><i class="bi bi-box-arrow-up-right"></i> Ouvrir</a>
         </div>
     </div>
     <div class="service-card" id="svc-loki">
         <div class="svc-icon" style="color: #f5a623;"><i class="bi bi-journal-text"></i></div>
-        <div class="svc-info">
+        <div>
             <div class="svc-name">Loki</div>
             <div class="svc-status" id="svc-status-loki"><span class="status-dot"></span> ...</div>
         </div>
     </div>
     <div class="service-card" id="svc-alertmanager">
         <div class="svc-icon" style="color: #ff4169;"><i class="bi bi-bell-fill"></i></div>
-        <div class="svc-info">
+        <div>
             <div class="svc-name">Alertmanager</div>
             <div class="svc-status" id="svc-status-alertmanager"><span class="status-dot"></span> ...</div>
         </div>
     </div>
     <div class="service-card" id="svc-semaphore">
         <div class="svc-icon" style="color: #00b4d8;"><i class="bi bi-ui-checks-grid"></i></div>
-        <div class="svc-info">
+        <div>
             <div class="svc-name">Semaphore</div>
             <div class="svc-status" id="svc-status-semaphore"><span class="status-dot"></span> ...</div>
-            <a class="svc-link" href="http://173.249.47.92:3001/" target="_blank"><i class="bi bi-box-arrow-up-right"></i> Ouvrir</a>
         </div>
     </div>
     <div class="service-card" id="svc-node_exporter">
         <div class="svc-icon" style="color: #00d25b;"><i class="bi bi-cpu"></i></div>
-        <div class="svc-info">
+        <div>
             <div class="svc-name">Node Exporter</div>
             <div class="svc-status" id="svc-status-node_exporter"><span class="status-dot"></span> ...</div>
         </div>
     </div>
 </div>
 
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <div>
-        <span class="refresh-indicator"><i class="bi bi-arrow-clockwise" id="refreshIcon"></i> Temps réel (5s)</span>
-    </div>
-    <button class="btn btn-sm btn-accent" onclick="fetchAll()"><i class="bi bi-arrow-clockwise"></i> Rafraîchir</button>
+<div class="mon-tabs">
+    <div class="mon-tab active" onclick="switchTab('serveurs')"><i class="bi bi-hdd-rack"></i> Serveurs</div>
+    <div class="mon-tab" onclick="switchTab('grafana')"><i class="bi bi-bar-chart-fill"></i> Grafana</div>
+    <div class="mon-tab" onclick="switchTab('prometheus')"><i class="bi bi-fire"></i> Prometheus</div>
 </div>
 
-{% for key, info in targets.items %}
-<div class="server-card" id="server-{{ key }}">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <h6 class="mb-0">
-            <span class="status-dot" id="status-{{ key }}"></span>
-            <i class="bi bi-hdd-rack"></i> {{ info.label }}
-        </h6>
-        <span class="badge bg-secondary" id="uptime-{{ key }}">--</span>
+<div class="mon-panel active" id="panel-serveurs">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <span class="refresh-indicator"><i class="bi bi-arrow-clockwise" id="refreshIcon"></i> Temps réel (5s)</span>
+        </div>
+        <button class="btn btn-sm btn-accent" onclick="fetchAll()"><i class="bi bi-arrow-clockwise"></i> Rafraîchir</button>
     </div>
-    <div class="row g-3">
-        <div class="col-md-2">
-            <div class="metric-gauge">
-                <canvas id="gauge-cpu-{{ key }}"></canvas>
-                <div class="gauge-value" id="val-cpu-{{ key }}">--</div>
-            </div>
-            <div class="metric-label">CPU</div>
-            <div class="metric-detail" id="detail-cpu-{{ key }}"></div>
-        </div>
-        <div class="col-md-2">
-            <div class="metric-gauge">
-                <canvas id="gauge-mem-{{ key }}"></canvas>
-                <div class="gauge-value" id="val-mem-{{ key }}">--</div>
-            </div>
-            <div class="metric-label">RAM</div>
-            <div class="metric-detail" id="detail-mem-{{ key }}"></div>
-        </div>
-        <div class="col-md-2">
-            <div class="metric-gauge">
-                <canvas id="gauge-disk-{{ key }}"></canvas>
-                <div class="gauge-value" id="val-disk-{{ key }}">--</div>
-            </div>
-            <div class="metric-label">Disque /</div>
-            <div class="metric-detail" id="detail-disk-{{ key }}"></div>
-        </div>
-        <div class="col-md-3">
-            <div class="p-2 rounded" style="background: #0f0f13;">
-                <div class="d-flex justify-content-between">
-                    <span class="metric-label mb-0">Réseau IN</span>
-                    <span class="metric-detail" id="val-netin-{{ key }}">--</span>
-                </div>
-                <div class="mini-chart"><canvas id="chart-netin-{{ key }}"></canvas></div>
-                <div class="d-flex justify-content-between mt-2">
-                    <span class="metric-label mb-0">Réseau OUT</span>
-                    <span class="metric-detail" id="val-netout-{{ key }}">--</span>
-                </div>
-                <div class="mini-chart"><canvas id="chart-netout-{{ key }}"></canvas></div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <table class="table table-sm info-table mb-0">
-                <tr><td class="label">Load 1m</td><td id="info-load1-{{ key }}">--</td></tr>
-                <tr><td class="label">Load 5m</td><td id="info-load5-{{ key }}">--</td></tr>
-                <tr><td class="label">Load 15m</td><td id="info-load15-{{ key }}">--</td></tr>
-                <tr><td class="label">CPUs</td><td id="info-cpus-{{ key }}">--</td></tr>
-                <tr><td class="label">RAM totale</td><td id="info-memtotal-{{ key }}">--</td></tr>
-                <tr><td class="label">Disque total</td><td id="info-disktotal-{{ key }}">--</td></tr>
-            </table>
-        </div>
-    </div>
-</div>
-{% endfor %}
 
+    {% for key, info in targets.items %}
+    <div class="server-card" id="server-{{ key }}">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h6 class="mb-0">
+                <span class="status-dot" id="status-{{ key }}"></span>
+                <i class="bi bi-hdd-rack"></i> {{ info.label }}
+            </h6>
+            <span class="badge bg-secondary" id="uptime-{{ key }}">--</span>
+        </div>
+        <div class="row g-3">
+            <div class="col-md-2">
+                <div class="metric-gauge">
+                    <canvas id="gauge-cpu-{{ key }}"></canvas>
+                    <div class="gauge-value" id="val-cpu-{{ key }}">--</div>
+                </div>
+                <div class="metric-label">CPU</div>
+                <div class="metric-detail" id="detail-cpu-{{ key }}"></div>
+            </div>
+            <div class="col-md-2">
+                <div class="metric-gauge">
+                    <canvas id="gauge-mem-{{ key }}"></canvas>
+                    <div class="gauge-value" id="val-mem-{{ key }}">--</div>
+                </div>
+                <div class="metric-label">RAM</div>
+                <div class="metric-detail" id="detail-mem-{{ key }}"></div>
+            </div>
+            <div class="col-md-2">
+                <div class="metric-gauge">
+                    <canvas id="gauge-disk-{{ key }}"></canvas>
+                    <div class="gauge-value" id="val-disk-{{ key }}">--</div>
+                </div>
+                <div class="metric-label">Disque /</div>
+                <div class="metric-detail" id="detail-disk-{{ key }}"></div>
+            </div>
+            <div class="col-md-3">
+                <div class="p-2 rounded" style="background: #0f0f13;">
+                    <div class="d-flex justify-content-between">
+                        <span class="metric-label mb-0">Réseau IN</span>
+                        <span class="metric-detail" id="val-netin-{{ key }}">--</span>
+                    </div>
+                    <div class="mini-chart"><canvas id="chart-netin-{{ key }}"></canvas></div>
+                    <div class="d-flex justify-content-between mt-2">
+                        <span class="metric-label mb-0">Réseau OUT</span>
+                        <span class="metric-detail" id="val-netout-{{ key }}">--</span>
+                    </div>
+                    <div class="mini-chart"><canvas id="chart-netout-{{ key }}"></canvas></div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <table class="table table-sm info-table mb-0">
+                    <tr><td class="label">Load 1m</td><td id="info-load1-{{ key }}">--</td></tr>
+                    <tr><td class="label">Load 5m</td><td id="info-load5-{{ key }}">--</td></tr>
+                    <tr><td class="label">Load 15m</td><td id="info-load15-{{ key }}">--</td></tr>
+                    <tr><td class="label">CPUs</td><td id="info-cpus-{{ key }}">--</td></tr>
+                    <tr><td class="label">RAM totale</td><td id="info-memtotal-{{ key }}">--</td></tr>
+                    <tr><td class="label">Disque total</td><td id="info-disktotal-{{ key }}">--</td></tr>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<div class="mon-panel" id="panel-grafana">
+    <iframe id="grafana-frame" class="embed-frame" src="" frameborder="0"></iframe>
+</div>
+
+<div class="mon-panel" id="panel-prometheus">
+    <iframe id="prometheus-frame" class="embed-frame" src="" frameborder="0"></iframe>
+</div>
 
 {% endblock %}
 
 {% block extra_js %}
 <script>
+const csrfToken = '{{ csrf_token }}';
 const SERVERS = {{ targets_json|safe }};
 const HISTORY_LEN = 30;
 const netHistory = {};
@@ -174,6 +194,22 @@ const netCharts = {};
 Object.keys(SERVERS).forEach(key => {
     netHistory[key] = { in: [], out: [], labels: [] };
 });
+
+function switchTab(name) {
+    document.querySelectorAll('.mon-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.mon-panel').forEach(p => p.classList.remove('active'));
+    document.getElementById('panel-' + name).classList.add('active');
+    event.target.closest('.mon-tab').classList.add('active');
+
+    if (name === 'grafana') {
+        const frame = document.getElementById('grafana-frame');
+        if (!frame.src || frame.src === location.href) frame.src = '/grafana/';
+    }
+    if (name === 'prometheus') {
+        const frame = document.getElementById('prometheus-frame');
+        if (!frame.src || frame.src === location.href) frame.src = '/prometheus/';
+    }
+}
 
 function getColor(val) {
     if (val < 50) return '#00d25b';
