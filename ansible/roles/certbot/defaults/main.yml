@@ -1,0 +1,5 @@
+---
+certbot_domain: "monitoring.meet-voice.fr"
+certbot_email: "contact@meet-voice.fr"
+certbot_webroot_path: "/var/www/certbot"
+certbot_nginx_config: "/etc/nginx/sites-enabled/grafana.conf"

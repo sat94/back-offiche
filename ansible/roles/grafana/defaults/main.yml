@@ -1,0 +1,12 @@
+---
+grafana_version: "10.4.0"
+grafana_port: 3000
+grafana_user: "grafana"
+grafana_group: "grafana"
+grafana_data_dir: "/var/lib/grafana"
+grafana_logs_dir: "/var/log/grafana"
+grafana_config_dir: "/etc/grafana"
+grafana_admin_user: "admin"
+# Le mot de passe est lu depuis le vault (ansible/group_vars/vault.yml)
+# Chiffrer avec : ansible-vault encrypt group_vars/vault.yml
+grafana_admin_password: "{{ vault_grafana_admin_password }}"

@@ -1,0 +1,106 @@
+---
+- name: "Installer les dépendances"
+  apt:
+    name:
+      - apt-transport-https
+      - software-properties-common
+      - wget
+    state: present
+    update_cache: true
+
+- name: "Ajouter la clé GPG Grafana"
+  apt_key:
+    url: "https://apt.grafana.com/gpg.key"
+    state: present
+
+- name: "Ajouter le dépôt Grafana"
+  apt_repository:
+    repo: "deb https://apt.grafana.com stable main"
+    state: present
+    filename: grafana
+
+- name: "Installer Grafana"
+  apt:
+    name: "grafana={{ grafana_version }}"
+    state: present
+    update_cache: true
+
+- name: "Créer les dossiers Grafana"
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ grafana_user }}"
+    group: "{{ grafana_group }}"
+    mode: '0755'
+  loop:
+    - "{{ grafana_data_dir }}"
+    - "{{ grafana_logs_dir }}"
+
+- name: "Déployer la configuration grafana.ini"
+  template:
+    src: grafana.ini.j2
+    dest: "{{ grafana_config_dir }}/grafana.ini"
+    owner: "{{ grafana_user }}"
+    group: "{{ grafana_group }}"
+    mode: '0640'
+  notify: restart grafana
+
+- name: "Créer les dossiers de provisioning"
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ grafana_user }}"
+    group: "{{ grafana_group }}"
+    mode: '0755'
+  loop:
+    - "{{ grafana_config_dir }}/provisioning"
+    - "{{ grafana_config_dir }}/provisioning/datasources"
+    - "{{ grafana_config_dir }}/provisioning/dashboards"
+
+- name: "Créer le dossier de stockage des tableaux de bord Grafana"
+  file:
+    path: "/var/lib/grafana/dashboards"
+    state: directory
+    owner: "{{ grafana_user }}"
+    group: "{{ grafana_group }}"
+    mode: '0755'
+
+- name: "Déployer les datasources automatisées (Prometheus & Loki)"
+  template:
+    src: provisioning/datasources.yml.j2
+    dest: "{{ grafana_config_dir }}/provisioning/datasources/datasources.yml"
+    owner: "{{ grafana_user }}"
+    group: "{{ grafana_group }}"
+    mode: '0644'
+  notify: restart grafana
+
+- name: "Déployer la configuration de provisionnement dynamique des tableaux de bord"
+  template:
+    src: provisioning/dashboards.yml.j2
+    dest: "{{ grafana_config_dir }}/provisioning/dashboards/dashboards.yml"
+    owner: "{{ grafana_user }}"
+    group: "{{ grafana_group }}"
+    mode: '0644'
+  notify: restart grafana
+
+- name: "Copier le JSON du tableau de bord Node Exporter Full (1860)"
+  copy:
+    src: "dashboards/node-exporter-full.json"
+    dest: "/var/lib/grafana/dashboards/node-exporter-full.json"
+    owner: "{{ grafana_user }}"
+    group: "{{ grafana_group }}"
+    mode: '0644'
+  notify: restart grafana
+
+- name: "Activer et démarrer Grafana"
+  systemd:
+    name: grafana-server
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: "Autoriser le port 3000 (Grafana) dans UFW"
+  ufw:
+    rule: allow
+    port: '3000'
+    proto: tcp

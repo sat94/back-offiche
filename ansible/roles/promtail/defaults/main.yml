@@ -1,0 +1,6 @@
+---
+promtail_version: "2.9.0"
+promtail_user: "promtail"
+promtail_group: "promtail"
+promtail_config_dir: "/etc/promtail"
+loki_url: "http://{{ hostvars[groups['monitoring_server'][0]].ansible_host }}:3100"

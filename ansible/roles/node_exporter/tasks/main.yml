@@ -1,0 +1,72 @@
+---
+- name: "Créer le groupe node_exporter"
+  group:
+    name: "{{ node_exporter_group }}"
+    system: true
+    state: present
+
+- name: "Créer l'utilisateur node_exporter"
+  user:
+    name: "{{ node_exporter_user }}"
+    group: "{{ node_exporter_group }}"
+    shell: /sbin/nologin
+    system: true
+    create_home: false
+    state: present
+
+- name: "Créer le dossier de téléchargement"
+  file:
+    path: /tmp/node_exporter_install
+    state: directory
+    mode: '0755'
+
+- name: "Télécharger Node Exporter v{{ node_exporter_version }}"
+  get_url:
+    url: "https://github.com/prometheus/node_exporter/releases/download/v{{ node_exporter_version }}/node_exporter-{{ node_exporter_version }}.linux-amd64.tar.gz"
+    dest: "/tmp/node_exporter_install/node_exporter.tar.gz"
+    mode: '0644'
+
+- name: "Extraire l'archive"
+  unarchive:
+    src: "/tmp/node_exporter_install/node_exporter.tar.gz"
+    dest: "/tmp/node_exporter_install/"
+    remote_src: true
+    extra_opts: [--strip-components=1]
+
+- name: "Copier le binaire dans /usr/local/bin"
+  copy:
+    src: "/tmp/node_exporter_install/node_exporter"
+    dest: "{{ node_exporter_bin_path }}"
+    owner: "{{ node_exporter_user }}"
+    group: "{{ node_exporter_group }}"
+    mode: '0755'
+    remote_src: true
+  notify: restart node_exporter
+
+- name: "Déployer le service systemd"
+  template:
+    src: node_exporter.service.j2
+    dest: /etc/systemd/system/node_exporter.service
+    owner: root
+    group: root
+    mode: '0644'
+  notify: restart node_exporter
+
+- name: "Activer et démarrer node_exporter"
+  systemd:
+    name: node_exporter
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: "Nettoyer les fichiers temporaires"
+  file:
+    path: /tmp/node_exporter_install
+    state: absent
+
+- name: "Autoriser le port {{ node_exporter_port }} (Node Exporter) dans UFW"
+  ufw:
+    rule: allow
+    port: '{{ node_exporter_port }}'
+    proto: tcp
+  ignore_errors: true

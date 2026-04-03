@@ -1,0 +1,52 @@
+---
+- name: "Installer Nginx et Certbot"
+  apt:
+    name:
+      - nginx
+      - certbot
+      - python3-certbot-nginx
+    state: present
+    update_cache: true
+
+- name: "Autoriser Nginx dans UFW (HTTP et HTTPS)"
+  ufw:
+    rule: allow
+    name: "Nginx Full"
+
+- name: "Déployer la configuration Nginx pour Grafana"
+  template:
+    src: grafana.conf.j2
+    dest: /etc/nginx/sites-available/grafana.conf
+  notify: restart nginx
+
+- name: "Activer le site Grafana"
+  file:
+    src: /etc/nginx/sites-available/grafana.conf
+    dest: /etc/nginx/sites-enabled/grafana.conf
+    state: link
+  notify: restart nginx
+
+- name: "Supprimer le site par défaut de Nginx"
+  file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+  notify: restart nginx
+
+- name: "Vérifier la configuration Nginx"
+  command: nginx -t
+  notify: restart nginx
+
+- name: "Activer et démarrer Nginx"
+  systemd:
+    name: nginx
+    enabled: true
+    state: started
+
+# Note : L'obtention du certificat Certbot est mise en pause jusqu'à ce que le DNS soit propagé.
+# Vous pourrez décommenter cette tâche plus tard, quand le domaine pointera vers l'IP.
+# - name: "Générer le certificat SSL Let's Encrypt"
+#   command: >
+#     certbot --nginx -d {{ grafana_domain }} --non-interactive --agree-tos -m {{ grafana_admin_email }} --redirect
+#   args:
+#     creates: "/etc/letsencrypt/live/{{ grafana_domain }}/fullchain.pem"
+#   notify: restart nginx

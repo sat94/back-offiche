@@ -1,0 +1,100 @@
+---
+# ─────────────────────────────────────────────────────────────────────────────
+# Semaphore — UI open-source pour Ansible (alternative à Ansible Tower/AWX)
+# Déployé sur le monitoring_server (BACKEND) en tant que service systemd
+# Interface : http://BACKEND_IP:3001
+# ─────────────────────────────────────────────────────────────────────────────
+
+- name: "Créer l'utilisateur et le groupe semaphore"
+  user:
+    name: "{{ semaphore_user }}"
+    group: "{{ semaphore_group }}"
+    system: true
+    shell: /usr/sbin/nologin
+    create_home: false
+  register: semaphore_user_created
+  ignore_errors: true
+
+- name: "Créer le groupe semaphore si nécessaire"
+  group:
+    name: "{{ semaphore_group }}"
+    system: true
+    state: present
+  when: semaphore_user_created.failed is defined and semaphore_user_created.failed
+
+- name: "Créer l'utilisateur semaphore (second essai)"
+  user:
+    name: "{{ semaphore_user }}"
+    group: "{{ semaphore_group }}"
+    system: true
+    shell: /usr/sbin/nologin
+    create_home: false
+  when: semaphore_user_created.failed is defined and semaphore_user_created.failed
+
+- name: "Créer les dossiers Semaphore"
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ semaphore_user }}"
+    group: "{{ semaphore_group }}"
+    mode: '0750'
+  loop:
+    - "{{ semaphore_config_dir }}"
+    - "{{ semaphore_data_dir }}"
+
+- name: "Télécharger Semaphore v{{ semaphore_version }}"
+  get_url:
+    url: "https://github.com/ansible-semaphore/semaphore/releases/download/v{{ semaphore_version }}/semaphore_{{ semaphore_version }}_linux_amd64.tar.gz"
+    dest: "/tmp/semaphore.tar.gz"
+    mode: '0644'
+
+- name: "Extraire le binaire Semaphore"
+  unarchive:
+    src: "/tmp/semaphore.tar.gz"
+    dest: "/usr/local/bin/"
+    remote_src: true
+    extra_opts: [--strip-components=0]
+    include:
+      - semaphore
+
+- name: "Donner les permissions au binaire"
+  file:
+    path: /usr/local/bin/semaphore
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: "Déployer la configuration Semaphore"
+  template:
+    src: semaphore_config.json.j2
+    dest: "{{ semaphore_config_dir }}/config.json"
+    owner: "{{ semaphore_user }}"
+    group: "{{ semaphore_group }}"
+    mode: '0640'
+  notify: restart semaphore
+
+- name: "Déployer le service systemd Semaphore"
+  template:
+    src: semaphore.service.j2
+    dest: /etc/systemd/system/semaphore.service
+    mode: '0644'
+  notify: restart semaphore
+
+- name: "Activer et démarrer Semaphore"
+  systemd:
+    name: semaphore
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: "Ouvrir le port {{ semaphore_port }} (Semaphore UI)"
+  ufw:
+    rule: allow
+    port: "{{ semaphore_port }}"
+    proto: tcp
+  ignore_errors: true
+
+- name: "Nettoyer l'archive"
+  file:
+    path: /tmp/semaphore.tar.gz
+    state: absent

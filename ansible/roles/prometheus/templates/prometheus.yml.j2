@@ -1,0 +1,43 @@
+---
+global:
+  scrape_interval: {{ prometheus_scrape_interval }}
+  evaluation_interval: {{ prometheus_evaluation_interval }}
+  scrape_timeout: {{ prometheus_scrape_timeout }}
+  external_labels:
+    monitor: 'monitoring-project'
+    environment: 'production'
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - 'localhost:{{ alertmanager_port }}'
+
+rule_files:
+  - "{{ prometheus_config_dir }}/rules/*.yml"
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:{{ prometheus_port }}']
+        labels:
+          service: 'prometheus'
+
+  - job_name: 'node_exporter'
+    static_configs:
+{% for host in groups['monitored_servers'] | default([]) %}
+      - targets: ['{{ hostvars[host].ansible_host }}:{{ node_exporter_port }}']
+        labels:
+          instance: '{{ host }}'
+          service: 'node_exporter'
+{% endfor %}
+{% for host in groups['pending_servers'] | default([]) %}
+      - targets: ['{{ hostvars[host].ansible_host }}:{{ node_exporter_port }}']
+        labels:
+          instance: '{{ host }}'
+          service: 'node_exporter'
+{% endfor %}
+      - targets: ['localhost:{{ node_exporter_port }}']
+        labels:
+          instance: 'BACKEND'
+          service: 'node_exporter'

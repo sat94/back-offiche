@@ -1,0 +1,17 @@
+---
+# Version et installation
+node_exporter_version: "1.8.0"
+node_exporter_port: 9100
+node_exporter_user: "node_exporter"
+node_exporter_group: "node_exporter"
+node_exporter_bin_path: "/usr/local/bin/node_exporter"
+
+# Collecteurs activés
+node_exporter_collectors:
+  - cpu
+  - diskstats
+  - filesystem
+  - loadavg
+  - meminfo
+  - netdev
+  - time

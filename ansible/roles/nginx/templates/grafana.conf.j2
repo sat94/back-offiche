@@ -1,0 +1,66 @@
+# ──────────────────────────────────────────────────────────────────
+# Nginx — Reverse proxy Grafana — {{ grafana_domain }}
+# Généré par Ansible — ne pas modifier manuellement
+# ssl_enabled={{ ssl_enabled | default(false) }}
+# ──────────────────────────────────────────────────────────────────
+
+{% if ssl_enabled | default(false) %}
+# — Redirection HTTP → HTTPS —
+server {
+    listen 80;
+    server_name {{ grafana_domain }};
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+# — Serveur HTTPS principal —
+server {
+    listen 443 ssl;
+    server_name {{ grafana_domain }};
+
+    ssl_certificate     /etc/letsencrypt/live/{{ grafana_domain }}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/{{ grafana_domain }}/privkey.pem;
+
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_ciphers         HIGH:!aNULL:!MD5;
+    ssl_prefer_server_ciphers on;
+    ssl_session_cache   shared:SSL:10m;
+    ssl_session_timeout 10m;
+
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    add_header X-Frame-Options SAMEORIGIN always;
+    add_header X-Content-Type-Options nosniff always;
+
+    location / {
+        proxy_pass         http://127.0.0.1:{{ grafana_port }};
+        proxy_set_header   Host $http_host;
+        proxy_set_header   X-Real-IP $remote_addr;
+        proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto https;
+    }
+}
+{% else %}
+# — Serveur HTTP uniquement (avant certificat TLS) —
+server {
+    listen 80;
+    server_name {{ grafana_domain }};
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    location / {
+        proxy_pass         http://127.0.0.1:{{ grafana_port }};
+        proxy_set_header   Host $http_host;
+        proxy_set_header   X-Real-IP $remote_addr;
+        proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+    }
+}
+{% endif %}

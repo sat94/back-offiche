@@ -1,0 +1,10 @@
+# Fichier généré par Ansible - TOUTE MODIFICATION MANUELLE SERA ÉCRASÉE
+Port {{ ssh_port }}
+PermitRootLogin {{ ssh_permit_root_login }}
+PasswordAuthentication {{ ssh_password_authentication }}
+AllowUsers {{ ansible_user }}
+MaxAuthTries {{ ssh_max_auth_tries }}
+ClientAliveInterval {{ ssh_client_alive_interval }}
+ChallengeResponseAuthentication no
+X11Forwarding no
+UsePAM yes

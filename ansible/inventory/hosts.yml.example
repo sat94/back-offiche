@@ -1,0 +1,50 @@
+---
+all:
+  vars:
+    ansible_user: root
+    ansible_ssh_private_key_file: ~/.ssh/ansible_key
+    ansible_python_interpreter: /usr/bin/python3
+
+  children:
+
+    # Serveur central de monitoring
+    monitoring_server:
+      hosts:
+        BACKEND:
+          ansible_host: <IP_BACKEND>
+
+    # Serveurs accessibles avec clé SSH
+    monitored_servers:
+      hosts:
+        FRONTEND:
+          ansible_host: <IP_FRONTEND>
+        IA:
+          ansible_host: <IP_IA>
+        Messagerie:
+          ansible_host: <IP_MESSAGERIE>
+        websocket:
+          ansible_host: <IP_WEBSOCKET>
+          ansible_user: <USER_WEBSOCKET>
+
+    # Serveurs en attente (clé SSH non déposée)
+    # A activer quand le tuteur aura déposé la clé
+    pending_servers:
+      hosts:
+        PostgreSQL:
+          ansible_host: <IP_POSTGRESQL>
+        PostgreSQLVector:
+          ansible_host: <IP_POSTGRESQL_VECTOR>
+        MongoDB-evenement:
+          ansible_host: <IP_MONGODB_EVENEMENT>
+        MongoDB-reseaux:
+          ansible_host: <IP_MONGODB_RESEAUX>
+        MongoDB-messagerie:
+          ansible_host: <IP_MONGODB_MESSAGERIE>
+        Evenement:
+          ansible_host: <IP_EVENEMENT>
+        Automatisation:
+          ansible_host: <IP_AUTOMATISATION>
+        Article:
+          ansible_host: <IP_ARTICLE>
+        ReseauxSociaux:
+          ansible_host: <IP_RESEAUX_SOCIAUX>

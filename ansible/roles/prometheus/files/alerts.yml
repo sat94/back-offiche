@@ -1,0 +1,39 @@
+---
+groups:
+  - name: "serveurs"
+    rules:
+      - alert: ServeurDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Serveur {{ $labels.instance }} est DOWN"
+          description: "Le serveur {{ $labels.instance }} est inaccessible depuis plus d'1 minute."
+
+      - alert: CPUEleve
+        expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "CPU élevé sur {{ $labels.instance }}"
+          description: "CPU à {{ $value | printf \"%.1f\" }}% depuis 5 minutes."
+
+      - alert: RAMElevee
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 90
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "RAM élevée sur {{ $labels.instance }}"
+          description: "RAM à {{ $value | printf \"%.1f\" }}% depuis 5 minutes."
+
+      - alert: DisqueEleve
+        expr: (1 - (node_filesystem_avail_bytes{fstype!="tmpfs"} / node_filesystem_size_bytes{fstype!="tmpfs"})) * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Disque élevé sur {{ $labels.instance }}"
+          description: "Disque à {{ $value | printf \"%.1f\" }}% sur {{ $labels.mountpoint }}."

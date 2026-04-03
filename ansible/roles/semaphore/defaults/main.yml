@@ -1,0 +1,19 @@
+---
+semaphore_version: "2.10.22"
+semaphore_port: 3001
+semaphore_db_path: "/var/lib/semaphore/database.boltdb"
+semaphore_config_dir: "/etc/semaphore"
+semaphore_data_dir: "/var/lib/semaphore"
+semaphore_user: "semaphore"
+semaphore_group: "semaphore"
+
+# Compte admin — à surcharger via vault.yml
+semaphore_admin_name: "admin"
+semaphore_admin_login: "admin"
+semaphore_admin_email: "contact@meet-voice.fr"
+semaphore_admin_password: "{{ vault_semaphore_admin_password }}"
+
+# Dépôt Ansible à cloner dans Semaphore
+semaphore_repo_url: "git@github.com:meet-voice/infrastructure.git"
+semaphore_repo_branch: "main"
+semaphore_repo_ssh_key: "/root/.ssh/ansible_key"

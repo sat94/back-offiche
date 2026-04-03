@@ -1,0 +1,17 @@
+# Clés SSH
+*.pem
+*.key
+id_rsa*
+ansible_key*
+
+# Fichiers sensibles
+group_vars/vault*
+*.vault
+inventory/hosts.yml
+
+# Fichiers temporaires
+*.retry
+*.log
+__pycache__/
+*.pyc
+.ansible/

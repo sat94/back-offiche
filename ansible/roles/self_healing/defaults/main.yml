@@ -1,0 +1,16 @@
+---
+# Services à surveiller et redémarrer sur le serveur de monitoring
+monitoring_services:
+  - prometheus
+  - grafana-server
+  - alertmanager
+  - loki
+
+# Services à surveiller sur les serveurs monitorés
+node_services:
+  - node_exporter
+  - promtail
+
+# Heure du cron de réapplication complète (idempotency run)
+self_healing_cron_hour: "4"
+self_healing_cron_minute: "0"

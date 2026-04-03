@@ -1,0 +1,48 @@
+groups:
+  - name: node_alerts
+    rules:
+
+      - alert: InstanceDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Serveur {{ $labels.instance }} inaccessible"
+          description: "Le serveur {{ $labels.instance }} est DOWN depuis plus d'1 minute."
+
+      - alert: HighCPUUsage
+        expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "CPU élevé sur {{ $labels.instance }}"
+          description: "CPU > 80% depuis 5 minutes sur {{ $labels.instance }}."
+
+      - alert: HighMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 90
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "RAM élevée sur {{ $labels.instance }}"
+          description: "RAM > 90% depuis 5 minutes sur {{ $labels.instance }}."
+
+      - alert: HighDiskUsage
+        expr: (1 - (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"})) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Disque plein sur {{ $labels.instance }}"
+          description: "Disque / > 85% sur {{ $labels.instance }}."
+
+      - alert: SystemHighLoad
+        expr: node_load15 > 2
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Charge système élevée sur {{ $labels.instance }}"
+          description: "Load average 15min > 2 depuis 10 minutes sur {{ $labels.instance }}."

@@ -114,6 +114,28 @@ static/               # CSS, JS
 - **Terminal SSH** : terminal distant avec assistant AI
 - **Contabo** : gestion des VPS (snapshots, reinstallation, mots de passe)
 
+## Monitoring & Services
+
+- **Grafana** : http://173.249.47.92:3000/ (Login par defaut : `admin` / `admin`)
+- **Prometheus** : http://173.249.47.92:9090/
+- **Semaphore (UI Ansible)** : http://173.249.47.92:3001/
+
+Services actifs sur le serveur :
+- **Alertmanager** v0.27.0 (systemd)
+- **Loki** v2.9.0 (systemd)
+
+## Ansible
+
+Le dossier `ansible/` contient les playbooks et roles Ansible pour le provisioning et la configuration du serveur de monitoring :
+- Prometheus, Grafana, Loki, Alertmanager, Promtail
+- Semaphore (UI Ansible)
+- Nginx, Certbot, SSH hardening, Self-healing
+
+```bash
+cd ansible
+ansible-playbook -i inventory site.yml
+```
+
 ## Docker
 
 ```powershell

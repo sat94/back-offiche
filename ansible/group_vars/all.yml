@@ -1,0 +1,30 @@
+# Versions des outils
+node_exporter_version: "1.8.0"
+prometheus_version: "2.51.0"
+grafana_version: "10.4.0"
+loki_version: "2.9.0"
+
+# Ports
+node_exporter_port: 9100
+prometheus_port: 9090
+grafana_port: 3000
+alertmanager_port: 9093
+
+# Sécurité SSH
+ssh_permit_root_login: "no"
+ssh_password_authentication: "no"
+ssh_port: 22
+ssh_max_auth_tries: 5
+ssh_client_alive_interval: 300
+vault_grafana_admin_password: "Dowdow3510."
+
+# Alertmanager — Slack (mettre une URL vide si pas de Slack)
+vault_alertmanager_slack_webhook: ""
+vault_alertmanager_email_enabled: false
+vault_alertmanager_email_from: ""
+vault_alertmanager_email_to: ""
+vault_alertmanager_smtp_user: ""
+vault_alertmanager_smtp_password: ""
+
+# Semaphore (interface web pour Ansible)
+vault_semaphore_admin_password: "VotreMotDePasseSemaphore2025!"

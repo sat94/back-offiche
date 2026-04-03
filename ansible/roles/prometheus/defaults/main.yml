@@ -1,0 +1,19 @@
+---
+# Version et installation
+prometheus_version: "2.51.0"
+prometheus_port: 9090
+prometheus_user: "prometheus"
+prometheus_group: "prometheus"
+prometheus_bin_path: "/usr/local/bin/prometheus"
+prometheus_config_dir: "/etc/prometheus"
+prometheus_data_dir: "/var/lib/prometheus"
+
+# Scrape configuration
+prometheus_scrape_interval: "15s"
+prometheus_evaluation_interval: "15s"
+prometheus_scrape_timeout: "10s"
+node_exporter_port: 9100
+
+# Rétention des données
+prometheus_retention_time: "30d"
+prometheus_retention_size: "10GB"

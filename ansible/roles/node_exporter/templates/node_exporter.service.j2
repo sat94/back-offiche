@@ -1,0 +1,25 @@
+[Unit]
+Description=Node Exporter v{{ node_exporter_version }}
+Documentation=https://prometheus.io/docs/guides/node-exporter/
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=120
+StartLimitBurst=5
+
+[Service]
+User={{ node_exporter_user }}
+Group={{ node_exporter_group }}
+Type=simple
+Restart=always
+RestartSec=10s
+TimeoutStartSec=30
+WatchdogSec=30
+ExecStart={{ node_exporter_bin_path }} \
+  --web.listen-address=0.0.0.0:{{ node_exporter_port }} \
+  --collector.disable-defaults \
+{% for collector in node_exporter_collectors %}
+  --collector.{{ collector }} \
+{% endfor %}
+
+[Install]
+WantedBy=multi-user.target

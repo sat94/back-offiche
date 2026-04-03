@@ -1,0 +1,94 @@
+
+---
+# ============================================
+# PLAYBOOK PRINCIPAL — Monitoring Infrastructure
+# ============================================
+
+# --- Node Exporter sur tous les serveurs cibles ---
+- name: "📦 Déploiement Node Exporter"
+  hosts: all
+  become: true
+  roles:
+    - ssh_hardening
+    - node_exporter
+
+# --- Prometheus sur le serveur central ---
+- name: "📊 Déploiement Prometheus"
+  hosts: monitoring_server
+  become: true
+  roles:
+    - prometheus
+
+- name: "🌐 Déploiement Nginx (Reverse Proxy)"
+  hosts: monitoring_server
+  become: true
+  roles:
+    - nginx
+
+- name: "📈 Déploiement Grafana"
+  hosts: monitoring_server
+  become: true
+  roles:
+    - grafana
+
+- name: "🔔 Déploiement Alertmanager"
+  hosts: monitoring_server
+  become: true
+  roles:
+    - alertmanager
+
+- name: "📋 Déploiement Loki"
+  hosts: monitoring_server
+  become: true
+  roles:
+    - loki
+
+- name: "📋 Déploiement Promtail"
+  hosts: monitored_servers
+  become: true
+  roles:
+    - promtail
+
+# --- Certbot (TLS Let's Encrypt) — à lancer après DNS configuré ---
+# Pré-requis : le domaine monitoring.meet-voice.fr doit pointer vers l'IP du BACKEND
+# Lancer séparément : ansible-playbook site.yml --tags certbot
+- name: "🔒 TLS Let's Encrypt via Certbot"
+  hosts: monitoring_server
+  become: true
+  tags:
+    - certbot
+    - tls
+  roles:
+    - certbot
+
+# --- Self-Healing — vérifie et redémarre les services en erreur ---
+# Inclus dans chaque run complet ET planifié via cron sur le serveur
+- name: "💊 Self-Healing — services monitoring"
+  hosts: monitoring_server
+  become: true
+  tags:
+    - self_healing
+    - heal
+  roles:
+    - self_healing
+
+- name: "💊 Self-Healing — node_exporter + promtail"
+  hosts: monitored_servers
+  become: true
+  tags:
+    - self_healing
+    - heal
+  roles:
+    - self_healing
+
+# --- Semaphore UI — à déployer une seule fois sur le monitoring_server ---
+# Interface web pour déclencher les playbooks sans ligne de commande
+# Lancer : ansible-playbook site.yml --tags semaphore
+- name: "🖥️  Semaphore — UI Ansible (Ansible Tower open-source)"
+  hosts: monitoring_server
+  become: true
+  tags:
+    - semaphore
+    - ui
+  roles:
+    - semaphore

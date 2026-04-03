@@ -1,0 +1,82 @@
+---
+- name: "Créer le groupe loki"
+  group:
+    name: "{{ loki_group }}"
+    system: true
+    state: present
+
+- name: "Créer l'utilisateur loki"
+  user:
+    name: "{{ loki_user }}"
+    group: "{{ loki_group }}"
+    system: true
+    shell: /usr/sbin/nologin
+    create_home: false
+
+- name: "Créer les dossiers loki"
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ loki_user }}"
+    group: "{{ loki_group }}"
+    mode: '0755'
+  loop:
+    - "{{ loki_config_dir }}"
+    - "{{ loki_data_dir }}"
+    - "{{ loki_data_dir }}/chunks"
+    - "{{ loki_data_dir }}/rules"
+    - "{{ loki_data_dir }}/compactor"
+
+- name: "Télécharger Loki"
+  get_url:
+    url: "https://github.com/grafana/loki/releases/download/v{{ loki_version }}/loki-linux-amd64.zip"
+    dest: "/tmp/loki-linux-amd64.zip"
+
+- name: "Installer unzip"
+  apt:
+    name: unzip
+    state: present
+
+- name: "Extraire Loki"
+  unarchive:
+    src: "/tmp/loki-linux-amd64.zip"
+    dest: /tmp/
+    remote_src: true
+
+- name: "Copier le binaire"
+  copy:
+    src: "/tmp/loki-linux-amd64"
+    dest: "/usr/local/bin/loki"
+    mode: '0755'
+    remote_src: true
+
+- name: "Déployer la configuration loki"
+  template:
+    src: loki-config.yml.j2
+    dest: "{{ loki_config_dir }}/loki-config.yml"
+    owner: "{{ loki_user }}"
+    group: "{{ loki_group }}"
+    mode: '0644'
+  notify: restart loki
+
+- name: "Déployer le service systemd"
+  template:
+    src: loki.service.j2
+    dest: /etc/systemd/system/loki.service
+    mode: '0644'
+  notify: restart loki
+
+- name: "Activer et démarrer loki"
+  systemd:
+    name: loki
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: "Nettoyer les fichiers temporaires"
+  file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "/tmp/loki-linux-amd64.zip"
+    - "/tmp/loki-linux-amd64"

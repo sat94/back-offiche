@@ -1,0 +1,52 @@
+---
+- name: "Installer certbot et le plugin nginx"
+  apt:
+    name:
+      - certbot
+      - python3-certbot-nginx
+    state: present
+    update_cache: true
+
+- name: "Créer le dossier webroot pour le challenge ACME"
+  file:
+    path: "{{ certbot_webroot_path }}"
+    state: directory
+    owner: www-data
+    group: www-data
+    mode: '0755'
+
+- name: "Vérifier si un certificat existe déjà pour {{ certbot_domain }}"
+  stat:
+    path: "/etc/letsencrypt/live/{{ certbot_domain }}/fullchain.pem"
+  register: cert_stat
+
+- name: "Obtenir le certificat TLS Let's Encrypt (première émission)"
+  command: >
+    certbot certonly
+    --nginx
+    --non-interactive
+    --agree-tos
+    --email {{ certbot_email }}
+    -d {{ certbot_domain }}
+  when: not cert_stat.stat.exists
+  notify: reload nginx
+
+- name: "Déployer la config Nginx avec HTTPS"
+  template:
+    src: ../nginx/templates/grafana.conf.j2
+    dest: "{{ certbot_nginx_config }}"
+    owner: root
+    group: root
+    mode: '0644'
+  vars:
+    ssl_enabled: true
+  notify: reload nginx
+
+- name: "Configurer le renouvellement automatique (cron)"
+  cron:
+    name: "Renouvellement certbot {{ certbot_domain }}"
+    minute: "0"
+    hour: "3"
+    day: "*/15"
+    job: "certbot renew --quiet --nginx && systemctl reload nginx"
+    user: root

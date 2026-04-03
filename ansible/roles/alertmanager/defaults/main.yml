@@ -1,0 +1,17 @@
+---
+alertmanager_version: "0.27.0"
+alertmanager_port: 9093
+alertmanager_user: "alertmanager"
+alertmanager_group: "alertmanager"
+alertmanager_config_dir: "/etc/alertmanager"
+alertmanager_data_dir: "/var/lib/alertmanager"
+# Secrets lus depuis vault.yml — ansible-vault encrypt group_vars/vault.yml
+alertmanager_slack_webhook: "{{ vault_alertmanager_slack_webhook }}"
+alertmanager_slack_channel: "#alertes"
+alertmanager_email_enabled: "{{ vault_alertmanager_email_enabled | default(false) }}"
+alertmanager_email_from: "{{ vault_alertmanager_email_from | default('') }}"
+alertmanager_email_to: "{{ vault_alertmanager_email_to | default('') }}"
+alertmanager_smtp_server: "smtp.gmail.com"
+alertmanager_smtp_port: "587"
+alertmanager_smtp_user: "{{ vault_alertmanager_smtp_user | default('') }}"
+alertmanager_smtp_password: "{{ vault_alertmanager_smtp_password | default('') }}"

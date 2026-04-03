@@ -1,0 +1,40 @@
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: 'slack'
+  group_by: ['alertname', 'cluster']
+  group_wait: 10s
+  group_interval: 10s
+  repeat_interval: 4h
+
+  routes:
+    - match:
+        severity: critical
+      receiver: 'slack'
+      continue: true
+    - match:
+        severity: warning
+      receiver: '{% if alertmanager_email_enabled %}slack-email{% else %}slack{% endif %}'
+
+receivers:
+  - name: 'slack'
+    slack_configs:
+      - api_url: "{{ alertmanager_slack_webhook }}"
+        channel: '#monitoring'
+        title: '{% raw %}{{ .GroupLabels.alertname }}{% endraw %}'
+        text: '{% raw %}{{ range .Alerts }}{{ .Annotations.description }}{{ end }}{% endraw %}'
+{% if alertmanager_email_enabled %}
+  - name: 'slack-email'
+    slack_configs:
+      - api_url: "{{ alertmanager_slack_webhook }}"
+        channel: '#monitoring'
+        title: '{% raw %}{{ .GroupLabels.alertname }}{% endraw %}'
+        text: '{% raw %}{{ range .Alerts }}{{ .Annotations.description }}{{ end }}{% endraw %}'
+    email_configs:
+      - to: "{{ alertmanager_email_to }}"
+        from: "{{ alertmanager_email_from }}"
+        smarthost: "{{ alertmanager_smtp_server }}:{{ alertmanager_smtp_port }}"
+        auth_username: "{{ alertmanager_smtp_user }}"
+        auth_password: "{{ alertmanager_smtp_password }}"
+{% endif %}

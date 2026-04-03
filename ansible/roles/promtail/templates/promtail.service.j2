@@ -1,0 +1,21 @@
+[Unit]
+Description=Promtail v{{ promtail_version }}
+Documentation=https://grafana.com/docs/loki/latest/clients/promtail/
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=120
+StartLimitBurst=5
+
+[Service]
+User={{ promtail_user }}
+Group={{ promtail_group }}
+Type=simple
+Restart=always
+RestartSec=10s
+TimeoutStartSec=30
+WatchdogSec=30
+ExecStart=/usr/local/bin/promtail \
+  --config.file={{ promtail_config_dir }}/promtail-config.yml
+
+[Install]
+WantedBy=multi-user.target

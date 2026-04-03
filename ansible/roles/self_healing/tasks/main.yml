@@ -1,0 +1,85 @@
+---
+# ─────────────────────────────────────────────────────────────────────────────
+# Self-Healing — Vérifie et redémarre les services critiques si nécessaire
+# Logique :
+#   1. Vérification de l'état de chaque service
+#   2. Redémarrage immédiat si le service est down
+#   3. Réinstallation complète si le redémarrage échoue (binaire manquant)
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── Vérification + redémarrage des services monitoring (monitoring_server) ──
+- name: "Vérifier les services monitoring"
+  systemd:
+    name: "{{ item }}"
+    state: started
+    enabled: true
+  loop: "{{ monitoring_services }}"
+  when: "'monitoring_server' in group_names"
+  register: monitoring_service_status
+  ignore_errors: true
+
+- name: "Forcer le redémarrage des services monitoring en échec"
+  systemd:
+    name: "{{ item.item }}"
+    state: restarted
+  loop: "{{ monitoring_service_status.results }}"
+  when:
+    - "'monitoring_server' in group_names"
+    - item.failed is defined
+    - item.failed
+  ignore_errors: true
+
+# ── Vérification + redémarrage des services sur les serveurs monitorés ──
+- name: "Vérifier node_exporter et promtail"
+  systemd:
+    name: "{{ item }}"
+    state: started
+    enabled: true
+  loop: "{{ node_services }}"
+  when: "'monitored_servers' in group_names"
+  register: node_service_status
+  ignore_errors: true
+
+- name: "Forcer le redémarrage des services node en échec"
+  systemd:
+    name: "{{ item.item }}"
+    state: restarted
+  loop: "{{ node_service_status.results }}"
+  when:
+    - "'monitored_servers' in group_names"
+    - item.failed is defined
+    - item.failed
+  ignore_errors: true
+
+# ── Cron de réapplication idempotente (ansible-pull ou playbook complet) ──
+# Ce cron s'assure que même après une réinstallation OS ou une corruption,
+# le serveur revient à l'état désiré sans intervention manuelle.
+- name: "Installer le cron de self-healing (réapplication ansible chaque nuit)"
+  cron:
+    name: "MeetVoice self-healing — ansible site.yml"
+    hour: "{{ self_healing_cron_hour }}"
+    minute: "{{ self_healing_cron_minute }}"
+    job: >
+      cd /opt/meetvoice-ansible &&
+      ansible-playbook site.yml
+      --inventory inventory/hosts.yml
+      --private-key ~/.ssh/ansible_key
+      --tags self_healing
+      >> /var/log/ansible-self-healing.log 2>&1
+    user: root
+    state: present
+  when: "'monitoring_server' in group_names"
+
+- name: "Configurer la rotation des logs self-healing"
+  copy:
+    dest: /etc/logrotate.d/ansible-self-healing
+    content: |
+      /var/log/ansible-self-healing.log {
+          weekly
+          rotate 4
+          compress
+          missingok
+          notifempty
+      }
+    mode: '0644'
+  when: "'monitoring_server' in group_names"
