@@ -22,11 +22,75 @@
     .info-table td { padding: .3rem .5rem; font-size: .8rem; border-color: #2a2a35; }
     .info-table .label { color: #8a8a9a; }
     .refresh-indicator { font-size: .75rem; color: #666; }
-
+    .services-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+    .service-card {
+        background: #1a1a24; border: 1px solid #2a2a35; border-radius: 12px;
+        padding: 1.2rem; display: flex; align-items: center; gap: 1rem; transition: border-color .15s;
+    }
+    .service-card:hover { border-color: var(--accent); }
+    .service-card .svc-icon { font-size: 1.8rem; width: 44px; text-align: center; }
+    .service-card .svc-info { flex: 1; }
+    .service-card .svc-name { font-weight: 600; font-size: .9rem; color: #fff; }
+    .service-card .svc-version { font-size: .7rem; color: #666; }
+    .service-card .svc-status { font-size: .75rem; margin-top: .2rem; }
+    .service-card a.svc-link {
+        font-size: .7rem; color: var(--accent-light); text-decoration: none;
+        display: inline-block; margin-top: .3rem;
+    }
+    .service-card a.svc-link:hover { text-decoration: underline; }
 </style>
 {% endblock %}
 
 {% block content %}
+<h6 class="text-muted mb-3"><i class="bi bi-gear"></i> Services Monitoring</h6>
+<div class="services-grid" id="services-grid">
+    <div class="service-card" id="svc-grafana">
+        <div class="svc-icon" style="color: #f46800;"><i class="bi bi-bar-chart-fill"></i></div>
+        <div class="svc-info">
+            <div class="svc-name">Grafana</div>
+            <div class="svc-status" id="svc-status-grafana"><span class="status-dot"></span> ...</div>
+            <a class="svc-link" href="http://173.249.47.92:3000/" target="_blank"><i class="bi bi-box-arrow-up-right"></i> Ouvrir</a>
+        </div>
+    </div>
+    <div class="service-card" id="svc-prometheus">
+        <div class="svc-icon" style="color: #e6522c;"><i class="bi bi-fire"></i></div>
+        <div class="svc-info">
+            <div class="svc-name">Prometheus</div>
+            <div class="svc-status" id="svc-status-prometheus"><span class="status-dot"></span> ...</div>
+            <a class="svc-link" href="http://173.249.47.92:9090/" target="_blank"><i class="bi bi-box-arrow-up-right"></i> Ouvrir</a>
+        </div>
+    </div>
+    <div class="service-card" id="svc-loki">
+        <div class="svc-icon" style="color: #f5a623;"><i class="bi bi-journal-text"></i></div>
+        <div class="svc-info">
+            <div class="svc-name">Loki</div>
+            <div class="svc-status" id="svc-status-loki"><span class="status-dot"></span> ...</div>
+        </div>
+    </div>
+    <div class="service-card" id="svc-alertmanager">
+        <div class="svc-icon" style="color: #ff4169;"><i class="bi bi-bell-fill"></i></div>
+        <div class="svc-info">
+            <div class="svc-name">Alertmanager</div>
+            <div class="svc-status" id="svc-status-alertmanager"><span class="status-dot"></span> ...</div>
+        </div>
+    </div>
+    <div class="service-card" id="svc-semaphore">
+        <div class="svc-icon" style="color: #00b4d8;"><i class="bi bi-ui-checks-grid"></i></div>
+        <div class="svc-info">
+            <div class="svc-name">Semaphore</div>
+            <div class="svc-status" id="svc-status-semaphore"><span class="status-dot"></span> ...</div>
+            <a class="svc-link" href="http://173.249.47.92:3001/" target="_blank"><i class="bi bi-box-arrow-up-right"></i> Ouvrir</a>
+        </div>
+    </div>
+    <div class="service-card" id="svc-node_exporter">
+        <div class="svc-icon" style="color: #00d25b;"><i class="bi bi-cpu"></i></div>
+        <div class="svc-info">
+            <div class="svc-name">Node Exporter</div>
+            <div class="svc-status" id="svc-status-node_exporter"><span class="status-dot"></span> ...</div>
+        </div>
+    </div>
+</div>
+
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
         <span class="refresh-indicator"><i class="bi bi-arrow-clockwise" id="refreshIcon"></i> Temps réel (5s)</span>
@@ -268,6 +332,23 @@ function loop() {
 
 loop();
 setInterval(loop, 5000);
+
+function fetchServices() {
+    fetch("{% url 'dashboard:monitoring_services_api' %}")
+        .then(r => r.json())
+        .then(data => {
+            Object.keys(data).forEach(name => {
+                const svc = data[name];
+                const el = document.getElementById(`svc-status-${name}`);
+                if (!el) return;
+                const dotClass = svc.active ? 'ok' : 'err';
+                const label = svc.active ? 'Active' : 'Inactif';
+                el.innerHTML = `<span class="status-dot ${dotClass}"></span> ${label}`;
+            });
+        });
+}
+fetchServices();
+setInterval(fetchServices, 15000);
 </script>
 <style>
 @keyframes spin { to { transform: rotate(360deg); } }
