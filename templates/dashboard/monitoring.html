@@ -99,6 +99,9 @@
     <div class="mon-tab active" onclick="switchTab('serveurs')"><i class="bi bi-hdd-rack"></i> Serveurs</div>
     <div class="mon-tab" onclick="switchTab('grafana')"><i class="bi bi-bar-chart-fill"></i> Grafana</div>
     <div class="mon-tab" onclick="switchTab('prometheus')"><i class="bi bi-fire"></i> Prometheus</div>
+    <div class="mon-tab" onclick="switchTab('alertmanager')"><i class="bi bi-bell-fill"></i> Alertmanager</div>
+    <div class="mon-tab" onclick="switchTab('loki')"><i class="bi bi-journal-text"></i> Loki</div>
+    <div class="mon-tab" onclick="switchTab('semaphore')"><i class="bi bi-ui-checks-grid"></i> Semaphore</div>
 </div>
 
 <div class="mon-panel active" id="panel-serveurs">
@@ -173,11 +176,23 @@
 </div>
 
 <div class="mon-panel" id="panel-grafana">
-    <iframe id="grafana-frame" class="embed-frame" src="" frameborder="0"></iframe>
+    <iframe id="grafana-frame" class="embed-frame" src="" frameborder="0" style="min-height: calc(100vh - 280px);"></iframe>
 </div>
 
 <div class="mon-panel" id="panel-prometheus">
-    <iframe id="prometheus-frame" class="embed-frame" src="" frameborder="0"></iframe>
+    <iframe id="prometheus-frame" class="embed-frame" src="" frameborder="0" style="min-height: calc(100vh - 280px);"></iframe>
+</div>
+
+<div class="mon-panel" id="panel-alertmanager">
+    <iframe id="alertmanager-frame" class="embed-frame" src="" frameborder="0" style="min-height: calc(100vh - 280px);"></iframe>
+</div>
+
+<div class="mon-panel" id="panel-loki">
+    <iframe id="loki-frame" class="embed-frame" src="" frameborder="0" style="min-height: calc(100vh - 280px);"></iframe>
+</div>
+
+<div class="mon-panel" id="panel-semaphore">
+    <iframe id="semaphore-frame" class="embed-frame" src="" frameborder="0" style="min-height: calc(100vh - 280px);"></iframe>
 </div>
 
 {% endblock %}
@@ -195,19 +210,25 @@ Object.keys(SERVERS).forEach(key => {
     netHistory[key] = { in: [], out: [], labels: [] };
 });
 
+const IFRAME_URLS = {
+    grafana: '/grafana/d/rYdddlPWk/node-exporter-full?orgId=1&kiosk',
+    prometheus: '/prometheus/',
+    alertmanager: '/alertmanager/',
+    loki: '/grafana/explore?orgId=1&left=%7B%22datasource%22:%22P8E80F9AEF21F6940%22,%22queries%22:%5B%7B%22refId%22:%22A%22,%22datasource%22:%7B%22type%22:%22loki%22,%22uid%22:%22P8E80F9AEF21F6940%22%7D%7D%5D%7D&kiosk',
+    semaphore: '/semaphore/',
+};
+
 function switchTab(name) {
     document.querySelectorAll('.mon-tab').forEach(t => t.classList.remove('active'));
     document.querySelectorAll('.mon-panel').forEach(p => p.classList.remove('active'));
     document.getElementById('panel-' + name).classList.add('active');
     event.target.closest('.mon-tab').classList.add('active');
 
-    if (name === 'grafana') {
-        const frame = document.getElementById('grafana-frame');
-        if (!frame.src || frame.src === location.href) frame.src = '/grafana/';
-    }
-    if (name === 'prometheus') {
-        const frame = document.getElementById('prometheus-frame');
-        if (!frame.src || frame.src === location.href) frame.src = '/prometheus/';
+    if (IFRAME_URLS[name]) {
+        const frame = document.getElementById(name + '-frame');
+        if (frame && (!frame.src || frame.src === location.href)) {
+            frame.src = IFRAME_URLS[name];
+        }
     }
 }
 
