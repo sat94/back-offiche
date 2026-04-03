@@ -2,161 +2,172 @@
 {% block title %}Dashboard - MeetVoice{% endblock %}
 {% block page_title %}Dashboard{% endblock %}
 
+{% block extra_css %}
+<style>
+    .mini-stat{font-size:.75rem;color:#8a8a9a;margin-top:.15rem;}
+    .mini-stat .num{color:#fff;font-weight:600;}
+    .recent-avatar{width:36px;height:36px;border-radius:50%;object-fit:cover;border:2px solid #2a2a35;}
+    .recent-item{display:flex;align-items:center;gap:.75rem;padding:.5rem .6rem;border-radius:8px;transition:background .15s;}
+    .recent-item:hover{background:#1f1f2e;}
+    .pct-bar{height:6px;border-radius:3px;background:#12121a;overflow:hidden;}
+    .pct-bar-fill{height:100%;border-radius:3px;}
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="row g-4 mb-4">
-    <div class="col-md-3">
-        <div class="stat-card d-flex justify-content-between align-items-center">
-            <div>
-                <div class="stat-value">{{ total_comptes }}</div>
-                <div class="stat-label">Comptes totaux</div>
-            </div>
-            <div class="stat-icon"><i class="bi bi-people"></i></div>
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+        <div class="stat-card">
+            <div class="stat-value">{{ total_comptes }}</div>
+            <div class="stat-label">Membres</div>
+            <div class="mini-stat"><span class="num">{{ online_comptes }}</span> en ligne</div>
         </div>
     </div>
-    <div class="col-md-3">
-        <div class="stat-card d-flex justify-content-between align-items-center">
-            <div>
-                <div class="stat-value">{{ new_comptes_7d }}</div>
-                <div class="stat-label">Nouveaux (7j)</div>
-            </div>
-            <div class="stat-icon"><i class="bi bi-person-plus"></i></div>
+    <div class="col-6 col-md-3">
+        <div class="stat-card">
+            <div class="stat-value" style="color:#00d25b;">+{{ new_comptes_today }}</div>
+            <div class="stat-label">Aujourd'hui</div>
+            <div class="mini-stat"><span class="num">+{{ new_comptes_7d }}</span> cette semaine</div>
         </div>
     </div>
-    <div class="col-md-3">
-        <div class="stat-card d-flex justify-content-between align-items-center">
-            <div>
-                <div class="stat-value">{{ new_comptes_30d }}</div>
-                <div class="stat-label">Nouveaux (30j)</div>
-            </div>
-            <div class="stat-icon"><i class="bi bi-graph-up-arrow"></i></div>
+    <div class="col-6 col-md-3">
+        <div class="stat-card">
+            <div class="stat-value">{{ verified_comptes }}</div>
+            <div class="stat-label">V&eacute;rifi&eacute;s</div>
+            <div class="mini-stat">{% widthratio verified_comptes total_comptes 100 %}% du total</div>
         </div>
     </div>
-    <div class="col-md-3">
-        <div class="stat-card d-flex justify-content-between align-items-center">
-            <div>
-                <div class="stat-value">{{ deleted_comptes }}</div>
-                <div class="stat-label">Comptes supprimés</div>
-            </div>
-            <div class="stat-icon"><i class="bi bi-person-x"></i></div>
+    <div class="col-6 col-md-3">
+        <div class="stat-card">
+            <div class="stat-value" style="color:#e84393;">{{ total_likes }}</div>
+            <div class="stat-label">Likes</div>
+            <div class="mini-stat"><span class="num">{{ total_vues }}</span> vues profil</div>
         </div>
     </div>
 </div>
 
-<div class="row g-4 mb-4">
-    <div class="col-md-3">
-        <div class="stat-card d-flex justify-content-between align-items-center">
-            <div>
-                <div class="stat-value">{{ verified_comptes }}</div>
-                <div class="stat-label">Verifies</div>
-            </div>
-            <div class="stat-icon"><i class="bi bi-patch-check"></i></div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="stat-card d-flex justify-content-between align-items-center">
-            <div>
-                <div class="stat-value">{{ total_likes }}</div>
-                <div class="stat-label">Likes</div>
-            </div>
-            <div class="stat-icon"><i class="bi bi-heart"></i></div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="stat-card d-flex justify-content-between align-items-center">
-            <div>
-                <div class="stat-value">{{ total_vues }}</div>
-                <div class="stat-label">Vues profil</div>
-            </div>
-            <div class="stat-icon"><i class="bi bi-eye"></i></div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="stat-card d-flex justify-content-between align-items-center">
-            <div>
-                <div class="stat-value">{{ total_photos }}</div>
-                <div class="stat-label">Photos</div>
-            </div>
-            <div class="stat-icon"><i class="bi bi-image"></i></div>
-        </div>
-    </div>
-</div>
-
-<div class="row g-4 mb-4">
-    <div class="col-md-8">
-        <div class="card-dark p-4">
-            <h6 class="mb-3">Nouveaux comptes (30 derniers jours)</h6>
-            <div style="position: relative; height: 250px;">
-                <canvas id="chartComptes"></canvas>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="card-dark p-4">
-            <h6 class="mb-3">Statut des bases de donnees</h6>
-            <div class="mb-3">
-                <div class="d-flex justify-content-between align-items-center mb-2">
-                    <span><i class="bi bi-database"></i> PostgreSQL</span>
-                    {% if pg_ok %}
-                    <span class="badge-status badge-ok">Connecte</span>
-                    {% else %}
-                    <span class="badge-status badge-err">Erreur</span>
-                    {% endif %}
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+        <div class="stat-card">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="stat-value">{{ with_photo_comptes }}</div>
+                    <div class="stat-label">Avec photo</div>
                 </div>
+                <i class="bi bi-image" style="font-size:1.5rem;color:#fdcb6e;opacity:.6;"></i>
+            </div>
+            <div class="pct-bar mt-2"><div class="pct-bar-fill" style="width:{% widthratio with_photo_comptes total_comptes 100 %}%;background:#fdcb6e;"></div></div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="stat-card">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="stat-value">{{ premium_comptes }}</div>
+                    <div class="stat-label">Premium</div>
+                </div>
+                <i class="bi bi-gem" style="font-size:1.5rem;color:#a29bfe;opacity:.6;"></i>
+            </div>
+            <div class="pct-bar mt-2"><div class="pct-bar-fill" style="width:{% widthratio premium_comptes total_comptes 100 %}%;background:#a29bfe;"></div></div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="stat-card">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="stat-value">{{ total_photos }}</div>
+                    <div class="stat-label">Photos</div>
+                </div>
+                <i class="bi bi-camera" style="font-size:1.5rem;color:#74b9ff;opacity:.6;"></i>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="stat-card">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="stat-value" style="color:#ff4169;">{{ deleted_comptes }}</div>
+                    <div class="stat-label">Supprim&eacute;s</div>
+                </div>
+                <i class="bi bi-person-x" style="font-size:1.5rem;color:#ff4169;opacity:.6;"></i>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4 mb-4">
+    <div class="col-12">
+        <div class="card-dark p-4 h-100">
+            <h6 class="mb-3" style="color:#c0c0d0;"><i class="bi bi-person-plus me-2" style="color:#00d25b;"></i>Derniers inscrits</h6>
+            {% for c in recent_comptes %}
+            <a href="{% url 'dashboard:compte_detail' c.pk %}" class="recent-item text-decoration-none">
+                {% if c.avatar %}
+                <img src="{{ c.avatar }}" class="recent-avatar" alt="">
+                {% else %}
+                <div class="recent-avatar d-flex align-items-center justify-content-center" style="background:#2a2a35;">
+                    <i class="bi bi-person" style="color:var(--accent);font-size:.9rem;"></i>
+                </div>
+                {% endif %}
+                <div class="flex-grow-1" style="min-width:0;">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span class="fw-semibold small text-light text-truncate">{{ c.username }}</span>
+                        {% if c.is_online %}<i class="bi bi-circle-fill" style="font-size:.45rem;color:#00d25b;"></i>{% endif %}
+                    </div>
+                    <div style="font-size:.7rem;color:#636e72;">
+                        {{ c.ville|default:"" }}
+                        {% if c.ville %}&middot;{% endif %}
+                        {{ c.created_at|timesince }} ago
+                    </div>
+                </div>
+                {% if c.is_verified %}<i class="bi bi-patch-check-fill" style="color:#00cec9;font-size:.7rem;"></i>{% endif %}
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<div class="row g-4 mb-4">
+    <div class="col-12 col-xl-6">
+        <div class="card-dark p-4">
+            <h6 class="mb-3" style="color:#c0c0d0;"><i class="bi bi-database me-2" style="color:var(--accent);"></i>Bases de donn&eacute;es</h6>
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <span class="d-flex align-items-center gap-2"><i class="bi bi-database" style="color:#74b9ff;"></i> PostgreSQL</span>
+                {% if pg_ok %}
+                <span class="badge" style="background:rgba(0,210,91,.15);color:#00d25b;"><i class="bi bi-check-circle me-1"></i>OK</span>
+                {% else %}
+                <span class="badge" style="background:rgba(255,65,105,.15);color:#ff4169;"><i class="bi bi-x-circle me-1"></i>Erreur</span>
+                {% endif %}
             </div>
             {% for key, info in mongo_status.items %}
             <div class="d-flex justify-content-between align-items-center mb-2">
-                <span><i class="bi bi-hdd-stack"></i> Mongo: {{ key }}</span>
+                <span class="d-flex align-items-center gap-2"><i class="bi bi-hdd-stack" style="color:#00cec9;"></i> {{ key }}</span>
                 {% if info.status == 'connected' %}
-                <span class="badge-status badge-ok">Connecte</span>
+                <span class="badge" style="background:rgba(0,210,91,.15);color:#00d25b;"><i class="bi bi-check-circle me-1"></i>OK</span>
                 {% else %}
-                <span class="badge-status badge-err">Erreur</span>
+                <span class="badge" style="background:rgba(255,65,105,.15);color:#ff4169;"><i class="bi bi-x-circle me-1"></i>Erreur</span>
                 {% endif %}
             </div>
             {% endfor %}
-            <hr class="border-secondary">
-            <div class="d-flex justify-content-between align-items-center mb-2">
-                <span><i class="bi bi-shield-x"></i> Blacklistes</span>
-                <span class="badge-status badge-warn">{{ total_blacklist }}</span>
+        </div>
+    </div>
+    <div class="col-12 col-xl-6">
+        <div class="card-dark p-4">
+            <h6 class="mb-3" style="color:#c0c0d0;"><i class="bi bi-shield-exclamation me-2" style="color:#ff4169;"></i>Mod&eacute;ration</h6>
+            <div class="d-flex justify-content-between align-items-center mb-3 p-2 rounded" style="background:#12121a;">
+                <span class="d-flex align-items-center gap-2"><i class="bi bi-flag" style="color:#ff4169;"></i> Signalements</span>
+                <span class="fw-bold" style="color:{% if total_signalements > 0 %}#ff4169{% else %}#00d25b{% endif %};">{{ total_signalements }}</span>
             </div>
-            <div class="d-flex justify-content-between align-items-center">
-                <span><i class="bi bi-exclamation-triangle"></i> Signalements</span>
-                <span class="badge-status badge-err">{{ total_signalements }}</span>
+            <div class="d-flex justify-content-between align-items-center mb-3 p-2 rounded" style="background:#12121a;">
+                <span class="d-flex align-items-center gap-2"><i class="bi bi-shield-x" style="color:#ffc107;"></i> Blacklistes</span>
+                <span class="fw-bold" style="color:#ffc107;">{{ total_blacklist }}</span>
+            </div>
+            <div class="d-flex justify-content-between align-items-center p-2 rounded" style="background:#12121a;">
+                <span class="d-flex align-items-center gap-2"><i class="bi bi-person-slash" style="color:#636e72;"></i> Inactifs</span>
+                <span class="fw-bold" style="color:#636e72;">{{ inactive_comptes }}</span>
             </div>
         </div>
     </div>
 </div>
 {% endblock %}
 
-{% block extra_js %}
-<script>
-var labels = {{ chart_labels|safe }};
-var data = {{ chart_data|safe }};
-if (labels.length > 0) {
-    new Chart(document.getElementById('chartComptes').getContext('2d'), {
-        type: 'line',
-        data: {
-            labels: labels,
-            datasets: [{
-                label: 'Nouveaux comptes',
-                data: data,
-                borderColor: '#6c5ce7',
-                backgroundColor: 'rgba(108, 92, 231, 0.1)',
-                fill: true, tension: 0.3, pointRadius: 4,
-                pointBackgroundColor: '#6c5ce7',
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: { legend: { display: false } },
-            scales: {
-                y: { beginAtZero: true, grid: { color: '#2a2a35' }, ticks: { color: '#8a8a9a', stepSize: 1 } },
-                x: { grid: { display: false }, ticks: { color: '#8a8a9a' } }
-            }
-        }
-    });
-} else {
-    document.getElementById('chartComptes').parentElement.innerHTML = '<p class="text-muted text-center py-4 mb-0">Aucune donnee sur les 30 derniers jours</p>';
-}
-</script>
-{% endblock %}
+{% block extra_js %}{% endblock %}

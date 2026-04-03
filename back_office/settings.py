@@ -201,17 +201,18 @@ _NE_SERVERS = [
     ('messagerie', 'Messagerie', '62.171.162.229', 'root'),
     ('websocket', 'WebSocket', '167.86.82.111', 'sulta'),
     ('gateway', 'Gateway', '89.117.49.9', 'root'),
-    ('back_office', 'Back Office', '144.91.110.197', 'root'),
+    ('speed_dating', 'Speed Dating', '144.91.110.197', 'root'),
 ]
 
 MONITORING_TARGETS = {}
+MONITORING_TARGETS['back_office'] = {'label': 'Back Office (173.249.47.92)', 'local_port': 9100}
 for _key, _label, _host, _user in _NE_SERVERS:
     _env_key = f'_SSH_NE_{_key.upper()}_PORT'
     try:
         _port = _start_ssh_tunnel(_host, 'localhost', 9100, _env_key, ssh_user=_user)
         MONITORING_TARGETS[_key] = {'label': f'{_label} ({_host})', 'local_port': _port}
     except Exception:
-        pass
+        MONITORING_TARGETS[_key] = {'label': f'{_label} ({_host})', 'local_port': None, 'error': 'SSH tunnel failed'}
 
 
 SECRET_KEY = config('SECRET_KEY', default='django-insecure-k=2qh+(0x!@i6&-slb2$#+kmo%!(k*t0c$ic&oem8z6np=^yk(')
@@ -321,24 +322,32 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 DATABASE_ROUTERS = ['content.db_router.ArticleRouter']
 
 REDIS_URL = config('REDIS_URL', default='')
+REDIS_SESSION_URL = config('REDIS_SESSION_URL', default='')
 
+_redis_url = None
 _redis_available = False
-if REDIS_URL:
-    try:
-        import redis as _redis_lib
-        _r = _redis_lib.from_url(REDIS_URL, socket_connect_timeout=2)
-        _r.ping()
-        _redis_available = True
-    except Exception:
-        pass
+for _candidate in [REDIS_SESSION_URL, REDIS_URL]:
+    if _candidate:
+        try:
+            import redis as _redis_lib
+            _r = _redis_lib.from_url(_candidate, socket_connect_timeout=2)
+            _r.ping()
+            _redis_url = _candidate
+            _redis_available = True
+            break
+        except Exception:
+            continue
 
 if _redis_available:
     SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
+    SESSION_CACHE_ALIAS = 'default'
+    SESSION_COOKIE_AGE = 86400 * 7
+    SESSION_SAVE_EVERY_REQUEST = True
     CACHES = {
         'default': {
             'BACKEND': 'django_redis.cache.RedisCache',
-            'LOCATION': REDIS_URL,
-            'TIMEOUT': 300,
+            'LOCATION': _redis_url,
+            'TIMEOUT': 86400,
             'OPTIONS': {
                 'CLIENT_CLASS': 'django_redis.client.DefaultClient',
                 'SOCKET_CONNECT_TIMEOUT': 5,
@@ -350,11 +359,13 @@ if _redis_available:
         }
     }
 else:
-    SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
+    SESSION_ENGINE = 'django.contrib.sessions.backends.db'
+    SESSION_COOKIE_AGE = 86400 * 7
+    SESSION_SAVE_EVERY_REQUEST = True
     CACHES = {
         'default': {
             'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-            'TIMEOUT': 300,
+            'TIMEOUT': 86400,
             'OPTIONS': {
                 'MAX_ENTRIES': 2000,
             },

@@ -2,7 +2,8 @@ import threading
 import time
 import paramiko
 
-SSH_KEY_PATH = 'C:/Users/sulta/.ssh/id_ed25519'
+import os
+SSH_KEY_PATH = os.path.expanduser('~/.ssh/id_ed25519')
 
 _sessions = {}
 _sessions_lock = threading.Lock()

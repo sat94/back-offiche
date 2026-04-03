@@ -161,6 +161,16 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js" defer></script>
+    <script>
+    var BoCache={
+        set:function(k,v,ttl){try{localStorage.setItem('bo_'+k,JSON.stringify({d:v,e:Date.now()+(ttl||60000)}));}catch(e){}},
+        get:function(k){try{var r=JSON.parse(localStorage.getItem('bo_'+k));if(r&&r.e>Date.now())return r.d;localStorage.removeItem('bo_'+k);}catch(e){}return null;},
+        del:function(k){try{localStorage.removeItem('bo_'+k);}catch(e){}},
+        clear:function(){try{Object.keys(localStorage).forEach(function(k){if(k.indexOf('bo_')===0)localStorage.removeItem(k);});}catch(e){}},
+        saveTab:function(page,tab){try{sessionStorage.setItem('bo_tab_'+page,tab);}catch(e){}},
+        getTab:function(page){try{return sessionStorage.getItem('bo_tab_'+page);}catch(e){}return null;}
+    };
+    </script>
     {% block extra_js %}{% endblock %}
 </body>
 </html>

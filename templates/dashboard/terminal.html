@@ -100,7 +100,7 @@
             <div class="pwd-inline" id="pwd-area">
                 <span class="small text-muted">Mot de passe :</span>
                 <input type="password" id="pwd-field" placeholder="(optionnel, si clé SSH échoue)">
-                <button class="btn btn-sm btn-accent" onclick="doConnect()" style="font-size: .7rem;">OK</button>
+                <button class="btn btn-sm btn-accent" onclick="doConnect(document.getElementById('pwd-field').value.trim())" style="font-size: .7rem;">OK</button>
             </div>
             <div class="term-output" id="term-output">
                 <div class="not-connected" id="no-conn-msg">
@@ -173,14 +173,12 @@ function selectServer(key) {
 
 function connectServer() {
     if (!currentServer) return;
-    document.getElementById('pwd-area').classList.add('active');
-    document.getElementById('pwd-field').value = '';
-    document.getElementById('pwd-field').focus();
+    doConnect();
 }
 
-function doConnect() {
+function doConnect(pwd) {
     if (!currentServer) return;
-    const pwd = document.getElementById('pwd-field').value.trim();
+    if (pwd === undefined) pwd = '';
     const btn = document.getElementById('connectBtn');
     btn.disabled = true;
     btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Connexion...';
@@ -196,13 +194,20 @@ function doConnect() {
     .then(data => {
         btn.disabled = false;
         btn.innerHTML = '<i class="bi bi-plug"></i> Connecter';
-        document.getElementById('pwd-area').classList.remove('active');
 
         if (data.error) {
-            appendOutput(`Erreur de connexion: ${data.error}\n`, 'err-line');
+            if (!document.getElementById('pwd-area').classList.contains('active')) {
+                document.getElementById('pwd-area').classList.add('active');
+                document.getElementById('pwd-field').value = '';
+                document.getElementById('pwd-field').focus();
+                appendOutput(`Clé SSH échouée, entrez le mot de passe\n`, 'err-line');
+            } else {
+                appendOutput(`Erreur de connexion: ${data.error}\n`, 'err-line');
+            }
             return;
         }
 
+        document.getElementById('pwd-area').classList.remove('active');
         connected = true;
         document.getElementById(`srv-${currentServer}`).classList.add('connected');
         document.getElementById('term-title').textContent = `${data.user}@${data.host} (${data.server})`;
@@ -486,7 +491,7 @@ document.getElementById('term-input').addEventListener('keydown', function(e) {
 });
 
 document.getElementById('pwd-field').addEventListener('keydown', function(e) {
-    if (e.key === 'Enter') doConnect();
+    if (e.key === 'Enter') doConnect(this.value.trim());
 });
 
 window.addEventListener('beforeunload', function() {

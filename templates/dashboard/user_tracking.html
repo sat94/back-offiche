@@ -72,7 +72,15 @@
     <div class="row g-4 mb-4">
         <div class="col-12">
             <div class="card-dark p-4">
-                <div class="section-title"><i class="bi bi-funnel me-2" style="color:var(--accent);"></i>Funnel d'inscription &mdash; o&ugrave; les utilisateurs abandonnent</div>
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+                    <div class="section-title mb-0"><i class="bi bi-funnel me-2" style="color:var(--accent);"></i>Funnel d'inscription &mdash; o&ugrave; les utilisateurs abandonnent</div>
+                    <div class="d-flex gap-2">
+                        <button class="tab-btn funnel-period-btn" data-period="1" onclick="switchFunnelPeriod(1,this)">Jour</button>
+                        <button class="tab-btn funnel-period-btn" data-period="7" onclick="switchFunnelPeriod(7,this)">Semaine</button>
+                        <button class="tab-btn funnel-period-btn active" data-period="30" onclick="switchFunnelPeriod(30,this)">Mois</button>
+                        <button class="tab-btn funnel-period-btn" data-period="0" onclick="switchFunnelPeriod(0,this)">Toute</button>
+                    </div>
+                </div>
                 <div id="anon-funnel"><div class="text-center text-muted py-3"><div class="spinner-border spinner-border-sm me-2"></div>Chargement...</div></div>
             </div>
         </div>
@@ -177,6 +185,31 @@
 {% block extra_js %}
 <script>
 var anonDailyChart=null, anonDeviceChart=null, authDailyChart=null, authDeviceChart=null, authHourlyChart=null;
+var currentFunnelPeriod=30;
+
+function switchFunnelPeriod(period, btn) {
+    currentFunnelPeriod=period;
+    document.querySelectorAll('.funnel-period-btn').forEach(function(el){el.classList.remove('active');});
+    btn.classList.add('active');
+    loadFunnel();
+}
+
+function loadFunnel() {
+    var el=document.getElementById('anon-funnel');
+    var cacheKey='funnel_'+currentFunnelPeriod;
+    var cached=BoCache.get(cacheKey);
+    if(cached){renderFunnel(cached);return;}
+    el.innerHTML='<div class="text-center text-muted py-3"><div class="spinner-border spinner-border-sm me-2"></div>Chargement...</div>';
+    var params=new URLSearchParams({section:'funnel',funnel_days:currentFunnelPeriod});
+    fetch('{% url "dashboard:user_tracking_api" %}?'+params.toString())
+        .then(function(r){return r.json();})
+        .then(function(data){
+            if(data.error){el.innerHTML='<div class="text-center text-danger py-3">'+data.error+'</div>';return;}
+            BoCache.set(cacheKey,data.anon_funnel,120000);
+            renderFunnel(data.anon_funnel);
+        })
+        .catch(function(err){el.innerHTML='<div class="text-center text-danger py-3">'+err.message+'</div>';});
+}
 
 function fmtNum(n) {
     if (n===null||n===undefined) return '0';
@@ -204,6 +237,7 @@ function switchTab(tab, btn) {
     document.querySelectorAll('.tab-btn').forEach(function(el){el.classList.remove('active');});
     document.getElementById('tab-'+tab).classList.add('active');
     btn.classList.add('active');
+    BoCache.saveTab('tracking',tab);
 }
 
 function pageIcon(path) {
@@ -357,47 +391,57 @@ function renderHourlyChart(canvasId, hourly, chartRef) {
     return new Chart(ctx,{type:'bar',data:{labels:labels,datasets:[{label:'Visites',data:counts,backgroundColor:'rgba(0,206,201,.6)',borderRadius:4}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#6a6a7a'},grid:{display:false}},y:{beginAtZero:true,ticks:{color:'#6a6a7a'},grid:{color:'#1a1a24'}}}}});
 }
 
+function applyTrackingData(data) {
+    if (data.anon_stats) {
+        document.getElementById('anon-total-views').textContent=fmtNum(data.anon_stats.total_views);
+        document.getElementById('anon-unique-ips').textContent=fmtNum(data.anon_stats.unique_ips);
+        document.getElementById('anon-today-views').textContent=fmtNum(data.anon_stats.today_views);
+        document.getElementById('anon-today-ips').textContent=fmtNum(data.anon_stats.today_unique);
+    }
+    if (data.auth_stats) {
+        document.getElementById('auth-total-views').textContent=fmtNum(data.auth_stats.total_views);
+        document.getElementById('auth-unique-users').textContent=fmtNum(data.auth_stats.unique_users);
+        document.getElementById('auth-today-views').textContent=fmtNum(data.auth_stats.today_views);
+        document.getElementById('auth-today-users').textContent=fmtNum(data.auth_stats.today_unique||0);
+    }
+    renderFunnel(data.anon_funnel);
+    anonDailyChart=renderDailyChart('anon-daily-chart',data.anon_daily,anonDailyChart);
+    anonDeviceChart=renderDeviceChart('anon-device-chart','anon-device-legend',data.anon_devices,anonDeviceChart);
+    renderTopPages('anon-top-pages',data.anon_top_pages);
+    renderReferrers('anon-referrers',data.anon_referrers);
+    renderVisitorList(data.anon_visitors,document.getElementById('anon-visitors-list'),'ip');
+    authDailyChart=renderDailyChart('auth-daily-chart',data.auth_daily,authDailyChart);
+    authDeviceChart=renderDeviceChart('auth-device-chart','auth-device-legend',data.auth_devices,authDeviceChart);
+    renderTopPages('auth-top-pages',data.auth_top_pages);
+    authHourlyChart=renderHourlyChart('auth-hourly-chart',data.auth_hourly,authHourlyChart);
+    renderVisitorList(data.auth_visitors,document.getElementById('auth-visitors-list'),'user_id');
+}
+
 function loadAll() {
     hideError();
+    var params=getParams();
+    var cacheKey='tracking_'+params.toString();
+    var cached=BoCache.get(cacheKey);
+    if(cached){applyTrackingData(cached);return;}
     var overlay=document.getElementById('loading-overlay');
     overlay.classList.add('show');
-    var params=getParams();
     fetch('{% url "dashboard:user_tracking_api" %}?'+params.toString())
         .then(function(r){return r.json();})
         .then(function(data){
             overlay.classList.remove('show');
             if (data.error){showError(data.error);return;}
-
-            if (data.anon_stats) {
-                document.getElementById('anon-total-views').textContent=fmtNum(data.anon_stats.total_views);
-                document.getElementById('anon-unique-ips').textContent=fmtNum(data.anon_stats.unique_ips);
-                document.getElementById('anon-today-views').textContent=fmtNum(data.anon_stats.today_views);
-                document.getElementById('anon-today-ips').textContent=fmtNum(data.anon_stats.today_unique);
-            }
-            if (data.auth_stats) {
-                document.getElementById('auth-total-views').textContent=fmtNum(data.auth_stats.total_views);
-                document.getElementById('auth-unique-users').textContent=fmtNum(data.auth_stats.unique_users);
-                document.getElementById('auth-today-views').textContent=fmtNum(data.auth_stats.today_views);
-                document.getElementById('auth-today-users').textContent=fmtNum(data.auth_stats.today_unique||0);
-            }
-
-            renderFunnel(data.anon_funnel);
-            anonDailyChart=renderDailyChart('anon-daily-chart',data.anon_daily,anonDailyChart);
-            anonDeviceChart=renderDeviceChart('anon-device-chart','anon-device-legend',data.anon_devices,anonDeviceChart);
-            renderTopPages('anon-top-pages',data.anon_top_pages);
-            renderReferrers('anon-referrers',data.anon_referrers);
-            renderVisitorList(data.anon_visitors,document.getElementById('anon-visitors-list'),'ip');
-
-            authDailyChart=renderDailyChart('auth-daily-chart',data.auth_daily,authDailyChart);
-            authDeviceChart=renderDeviceChart('auth-device-chart','auth-device-legend',data.auth_devices,authDeviceChart);
-            renderTopPages('auth-top-pages',data.auth_top_pages);
-            authHourlyChart=renderHourlyChart('auth-hourly-chart',data.auth_hourly,authHourlyChart);
-            renderVisitorList(data.auth_visitors,document.getElementById('auth-visitors-list'),'user_id');
+            BoCache.set(cacheKey,data,90000);
+            applyTrackingData(data);
         })
         .catch(function(err){overlay.classList.remove('show');showError(err.message);});
 }
 
-document.getElementById('filter-days').addEventListener('change',loadAll);
-document.addEventListener('DOMContentLoaded',function(){setTimeout(loadAll,100);setInterval(loadAll,60000);});
+document.getElementById('filter-days').addEventListener('change',function(){BoCache.del('tracking_'+getParams().toString());loadAll();});
+document.addEventListener('DOMContentLoaded',function(){
+    var st=BoCache.getTab('tracking');
+    if(st){var el=document.getElementById('tab-'+st);var btn=document.querySelector('.tab-btn[onclick*="\''+st+'\'"]');if(el&&btn){switchTab(st,btn);}}
+    setTimeout(loadAll,100);setInterval(loadAll,60000);
+});
+
 </script>
 {% endblock %}

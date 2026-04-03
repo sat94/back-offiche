@@ -366,13 +366,32 @@
                         <th>Contenu</th>
                         <th>Signalé</th>
                         <th>Date</th>
+                        <th></th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for c in profile_comments %}
-                    <tr>
-                        <td>{{ c.auteur }}</td>
-                        <td>{{ c.profil_utilisateur }}</td>
+                    <tr id="profile-comment-{{ c.id }}">
+                        <td>
+                            <div class="d-flex align-items-center gap-2">
+                                {% if c.auteur.avatar %}
+                                <img src="{{ c.auteur.avatar }}" class="post-avatar-sm" alt="">
+                                {% else %}
+                                <div class="post-avatar-sm d-flex align-items-center justify-content-center" style="background: #2a2a35;"><i class="bi bi-person" style="color: #6c5ce7; font-size: .7rem;"></i></div>
+                                {% endif %}
+                                <span>{{ c.auteur }}</span>
+                            </div>
+                        </td>
+                        <td>
+                            <div class="d-flex align-items-center gap-2">
+                                {% if c.profil_utilisateur.avatar %}
+                                <img src="{{ c.profil_utilisateur.avatar }}" class="post-avatar-sm" alt="">
+                                {% else %}
+                                <div class="post-avatar-sm d-flex align-items-center justify-content-center" style="background: #2a2a35;"><i class="bi bi-person" style="color: #6c5ce7; font-size: .7rem;"></i></div>
+                                {% endif %}
+                                <span>{{ c.profil_utilisateur }}</span>
+                            </div>
+                        </td>
                         <td class="small">{{ c.contenu|truncatechars:80 }}</td>
                         <td>
                             {% if c.signale %}
@@ -382,6 +401,11 @@
                             {% endif %}
                         </td>
                         <td class="small text-muted">{{ c.date_creation|date:"d/m/Y H:i" }}</td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-danger" style="font-size: .65rem; padding: 1px 6px;" onclick="deleteProfileComment({{ c.id }})" title="Supprimer">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -403,11 +427,12 @@
                         <th>Contenu</th>
                         <th>Signalé</th>
                         <th>Date</th>
+                        <th></th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for c in photo_comments %}
-                    <tr>
+                    <tr id="photo-comment-{{ c.id }}">
                         <td>
                             {% if c.photo.thumbnail %}
                             <img src="{{ c.photo.thumbnail }}" style="width: 44px; height: 44px; object-fit: cover; border-radius: 6px; border: 1px solid #2a2a35;">
@@ -417,7 +442,14 @@
                             <div style="width: 44px; height: 44px; border-radius: 6px; background: #2a2a35; display: flex; align-items: center; justify-content: center;"><i class="bi bi-image text-muted"></i></div>
                             {% endif %}
                         </td>
-                        <td>{{ c.auteur }}</td>
+                        <td>
+                            <div class="d-flex align-items-center gap-2">
+                                {% if c.auteur.avatar %}
+                                <img src="{{ c.auteur.avatar }}" class="post-avatar-sm" alt="">
+                                {% endif %}
+                                <span>{{ c.auteur }}</span>
+                            </div>
+                        </td>
                         <td class="small">{{ c.contenu|truncatechars:80 }}</td>
                         <td>
                             {% if c.signale %}
@@ -427,6 +459,11 @@
                             {% endif %}
                         </td>
                         <td class="small text-muted">{{ c.date_creation|date:"d/m/Y H:i" }}</td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-danger" style="font-size: .65rem; padding: 1px 6px;" onclick="deletePhotoComment({{ c.id }})" title="Supprimer">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -448,13 +485,30 @@
                         <th>Contenu</th>
                         <th>Signalé</th>
                         <th>Date</th>
+                        <th></th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for c in video_comments %}
-                    <tr>
-                        <td>{{ c.auteur }}</td>
-                        <td>{{ c.video }}</td>
+                    <tr id="video-comment-{{ c.id }}">
+                        <td>
+                            <div class="d-flex align-items-center gap-2">
+                                {% if c.auteur.avatar %}
+                                <img src="{{ c.auteur.avatar }}" class="post-avatar-sm" alt="">
+                                {% endif %}
+                                <span>{{ c.auteur }}</span>
+                            </div>
+                        </td>
+                        <td>
+                            <div class="d-flex align-items-center gap-2">
+                                {% if c.video.thumbnail_url %}
+                                <img src="{{ c.video.thumbnail_url }}" style="width: 44px; height: 44px; object-fit: cover; border-radius: 6px; border: 1px solid #2a2a35;">
+                                {% else %}
+                                <div style="width: 44px; height: 44px; border-radius: 6px; background: #2a2a35; display: flex; align-items: center; justify-content: center;"><i class="bi bi-camera-video text-muted"></i></div>
+                                {% endif %}
+                                <span class="small">{{ c.video.titre|default:"Sans titre" }}</span>
+                            </div>
+                        </td>
                         <td class="small">{{ c.contenu|truncatechars:80 }}</td>
                         <td>
                             {% if c.signale %}
@@ -464,12 +518,17 @@
                             {% endif %}
                         </td>
                         <td class="small text-muted">{{ c.date_creation|date:"d/m/Y H:i" }}</td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-danger" style="font-size: .65rem; padding: 1px 6px;" onclick="deleteVideoComment({{ c.id }})" title="Supprimer">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
             {% else %}
-            <p class="text-muted mb-0 text-center py-3">Aucun commentaire vidéo/événement</p>
+            <p class="text-muted mb-0 text-center py-3">Aucun commentaire vidéo</p>
             {% endif %}
         </div>
     </div>
@@ -677,6 +736,33 @@ function editEventComment(commentId) {
     });
 }
 
+function deleteProfileComment(commentId) {
+    if (!confirm('Supprimer ce commentaire de profil ?')) return;
+    fetch(`/moderation/profile-comment/${commentId}/delete/`, {
+        method: 'POST', headers: {'X-CSRFToken': csrfToken},
+    }).then(r => r.json()).then(() => {
+        document.getElementById(`profile-comment-${commentId}`).remove();
+    });
+}
+
+function deletePhotoComment(commentId) {
+    if (!confirm('Supprimer ce commentaire de photo ?')) return;
+    fetch(`/moderation/photo-comment/${commentId}/delete/`, {
+        method: 'POST', headers: {'X-CSRFToken': csrfToken},
+    }).then(r => r.json()).then(() => {
+        document.getElementById(`photo-comment-${commentId}`).remove();
+    });
+}
+
+function deleteVideoComment(commentId) {
+    if (!confirm('Supprimer ce commentaire vidéo ?')) return;
+    fetch(`/moderation/video-comment/${commentId}/delete/`, {
+        method: 'POST', headers: {'X-CSRFToken': csrfToken},
+    }).then(r => r.json()).then(() => {
+        document.getElementById(`video-comment-${commentId}`).remove();
+    });
+}
+
 function deleteReply(postId, commentId, replyId, btn) {
     if (!confirm('Supprimer cette réponse ?')) return;
     fetch(`/moderation/post/${postId}/comment/${commentId}/reply/${replyId}/delete/`, {
@@ -699,5 +785,11 @@ document.querySelectorAll('.moderate-btn').forEach(btn => {
         });
     });
 });
+
+document.querySelectorAll('[data-bs-toggle="pill"]').forEach(function(btn){
+    btn.addEventListener('shown.bs.tab',function(){BoCache.saveTab('moderation',btn.getAttribute('data-bs-target'));});
+});
+var savedTab=BoCache.getTab('moderation');
+if(savedTab){var t=document.querySelector('[data-bs-target="'+savedTab+'"]');if(t)new bootstrap.Tab(t).show();}
 </script>
 {% endblock %}

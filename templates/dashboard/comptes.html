@@ -2,41 +2,39 @@
 {% block title %}Comptes - MeetVoice{% endblock %}
 {% block page_title %}Comptes ({{ total }}){% endblock %}
 
-{% block content %}
-<div class="card-dark p-4 mb-4">
-    <h6 class="mb-3">Inscriptions par mois</h6>
-    <div style="position: relative; height: 250px;">
-        <canvas id="chartMois"></canvas>
-    </div>
-</div>
+{% block extra_css %}
+<style>
+    .compte-avatar{width:32px;height:32px;border-radius:50%;object-fit:cover;border:1px solid #2a2a35;}
+</style>
+{% endblock %}
 
+{% block content %}
 <div class="card-dark p-4">
     <div class="d-flex justify-content-between align-items-center mb-3">
         <form class="d-flex gap-2 search-bar" method="get">
-            <input type="text" name="q" value="{{ search }}" placeholder="Rechercher..." class="form-control" style="width: 250px;">
+            <input type="text" name="q" value="{{ search }}" placeholder="Rechercher un membre..." class="form-control" style="width: 250px;">
             <select name="status" class="form-select form-select-sm" style="width: 160px; background: #1a1a24; border-color: #2a2a35; color: #e0e0e0;">
                 <option value="">Tous</option>
-                <option value="verified" {% if status_filter == 'verified' %}selected{% endif %}>Vérifiés</option>
-                <option value="unverified" {% if status_filter == 'unverified' %}selected{% endif %}>Non vérifiés</option>
+                <option value="verified" {% if status_filter == 'verified' %}selected{% endif %}>V&eacute;rifi&eacute;s</option>
+                <option value="unverified" {% if status_filter == 'unverified' %}selected{% endif %}>Non v&eacute;rifi&eacute;s</option>
                 <option value="online" {% if status_filter == 'online' %}selected{% endif %}>En ligne</option>
                 <option value="inactive" {% if status_filter == 'inactive' %}selected{% endif %}>Inactifs</option>
             </select>
             <button class="btn btn-accent btn-sm">Filtrer</button>
         </form>
+        <span class="text-muted small">{{ total }} membre{{ total|pluralize:"s" }}</span>
     </div>
 
     <div class="table-responsive">
         <table class="table table-dark-custom table-hover align-middle">
             <thead>
                 <tr>
-                    <th>Utilisateur</th>
+                    <th>Membre</th>
                     <th>Email</th>
                     <th>Ville</th>
-                    <th>Abonnement</th>
-                    <th>Vérifié</th>
-                    <th>Actif</th>
-                    <th>En ligne</th>
-                    <th>Créé le</th>
+                    <th>Abo</th>
+                    <th>Statut</th>
+                    <th>Inscrit</th>
                     <th></th>
                 </tr>
             </thead>
@@ -44,72 +42,64 @@
                 {% for c in comptes %}
                 <tr>
                     <td>
-                        <a href="{% url 'dashboard:compte_detail' c.pk %}" class="text-decoration-none text-light fw-semibold">
-                            {{ c.username }}
+                        <a href="{% url 'dashboard:compte_detail' c.pk %}" class="d-flex align-items-center gap-2 text-decoration-none text-light">
+                            {% if c.avatar %}
+                            <img src="{{ c.avatar }}" class="compte-avatar" alt="">
+                            {% else %}
+                            <div class="compte-avatar d-flex align-items-center justify-content-center" style="background:#2a2a35;">
+                                <i class="bi bi-person" style="color:var(--accent);font-size:.75rem;"></i>
+                            </div>
+                            {% endif %}
+                            <div>
+                                <div class="fw-semibold">{{ c.username }}</div>
+                                {% if c.prenom or c.nom %}
+                                <div style="font-size:.7rem;color:#636e72;">{{ c.prenom }} {{ c.nom }}</div>
+                                {% endif %}
+                            </div>
                         </a>
-                        <div class="small text-muted">{{ c.prenom }} {{ c.nom }}</div>
                     </td>
-                    <td class="small">{{ c.email }}</td>
+                    <td class="small" style="color:#8a8a9a;">{{ c.email }}</td>
                     <td class="small">{{ c.ville|default:"-" }}</td>
-                    <td><span class="badge bg-secondary">{{ c.abonnement|default:"gratuit" }}</span></td>
                     <td>
-                        {% if c.is_verified %}<i class="bi bi-check-circle-fill text-success"></i>
-                        {% else %}<i class="bi bi-x-circle text-danger"></i>{% endif %}
+                        {% if c.abonnement and c.abonnement != 'gratuit' %}
+                        <span class="badge" style="background:rgba(162,155,254,.15);color:#a29bfe;font-size:.65rem;">{{ c.abonnement }}</span>
+                        {% else %}
+                        <span class="badge" style="background:rgba(138,138,154,.1);color:#636e72;font-size:.65rem;">gratuit</span>
+                        {% endif %}
                     </td>
                     <td>
-                        {% if c.is_active %}<i class="bi bi-check-circle-fill text-success"></i>
-                        {% else %}<i class="bi bi-x-circle text-danger"></i>{% endif %}
+                        <div class="d-flex align-items-center gap-2">
+                            {% if c.is_online %}
+                            <i class="bi bi-circle-fill" style="font-size:.4rem;color:#00d25b;"></i>
+                            <span style="font-size:.7rem;color:#00d25b;">En ligne</span>
+                            {% elif c.is_active %}
+                            {% if c.is_verified %}
+                            <i class="bi bi-patch-check-fill" style="font-size:.7rem;color:#00cec9;"></i>
+                            <span style="font-size:.7rem;color:#8a8a9a;">V&eacute;rifi&eacute;</span>
+                            {% else %}
+                            <i class="bi bi-clock" style="font-size:.7rem;color:#ffc107;"></i>
+                            <span style="font-size:.7rem;color:#ffc107;">Non v&eacute;rifi&eacute;</span>
+                            {% endif %}
+                            {% else %}
+                            <i class="bi bi-x-circle" style="font-size:.7rem;color:#ff4169;"></i>
+                            <span style="font-size:.7rem;color:#ff4169;">Inactif</span>
+                            {% endif %}
+                        </div>
                     </td>
                     <td>
-                        {% if c.is_online %}<i class="bi bi-circle-fill text-success small"></i>
-                        {% else %}<i class="bi bi-circle text-muted small"></i>{% endif %}
+                        <span class="small" style="color:#8a8a9a;">{{ c.created_at|timesince }}</span>
                     </td>
-                    <td class="small text-muted">{{ c.created_at|date:"d/m/Y H:i" }}</td>
                     <td>
-                        <a href="{% url 'dashboard:compte_detail' c.pk %}" class="btn btn-sm btn-outline-light">
+                        <a href="{% url 'dashboard:compte_detail' c.pk %}" class="btn btn-sm btn-outline-light" style="font-size:.7rem;padding:2px 8px;">
                             <i class="bi bi-eye"></i>
                         </a>
                     </td>
                 </tr>
                 {% empty %}
-                <tr><td colspan="9" class="text-center text-muted py-4">Aucun compte trouvé</td></tr>
+                <tr><td colspan="7" class="text-center text-muted py-4">Aucun compte trouv&eacute;</td></tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
 </div>
-{% endblock %}
-
-{% block extra_js %}
-<script>
-var labels = {{ chart_labels|safe }};
-var data = {{ chart_data|safe }};
-if (labels.length > 0) {
-    new Chart(document.getElementById('chartMois').getContext('2d'), {
-        type: 'bar',
-        data: {
-            labels: labels,
-            datasets: [{
-                label: 'Inscriptions',
-                data: data,
-                backgroundColor: 'rgba(108, 92, 231, 0.6)',
-                borderColor: '#6c5ce7',
-                borderWidth: 1,
-                borderRadius: 6,
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: { legend: { display: false } },
-            scales: {
-                y: { beginAtZero: true, grid: { color: '#2a2a35' }, ticks: { color: '#8a8a9a', stepSize: 1 } },
-                x: { grid: { display: false }, ticks: { color: '#8a8a9a' } }
-            }
-        }
-    });
-} else {
-    document.getElementById('chartMois').parentElement.innerHTML = '<p class="text-muted text-center py-4 mb-0">Aucune donnee disponible</p>';
-}
-</script>
 {% endblock %}

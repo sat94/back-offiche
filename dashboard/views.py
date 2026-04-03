@@ -73,21 +73,33 @@ def index(request):
     thirty_days_ago = now - timedelta(days=30)
     seven_days_ago = now - timedelta(days=7)
 
+    today = now.date()
+    yesterday = today - timedelta(days=1)
+
     try:
         stats = Compte.objects.aggregate(
             total=Count('id'),
             new_30d=Count('id', filter=Q(created_at__gte=thirty_days_ago)),
             new_7d=Count('id', filter=Q(created_at__gte=seven_days_ago)),
+            new_today=Count('id', filter=Q(created_at__date=today)),
             verified=Count('id', filter=Q(is_verified=True)),
             inactive=Count('id', filter=Q(is_active=False)),
+            online=Count('id', filter=Q(is_online=True)),
+            with_photo=Count('id', filter=Q(avatar__isnull=False) & ~Q(avatar='')),
+            premium=Count('id', filter=~Q(abonnement='gratuit') & Q(abonnement__isnull=False)),
         )
         total_comptes = stats['total']
         new_comptes_30d = stats['new_30d']
         new_comptes_7d = stats['new_7d']
+        new_comptes_today = stats['new_today']
         verified_comptes = stats['verified']
         inactive_comptes = stats['inactive']
+        online_comptes = stats['online']
+        with_photo_comptes = stats['with_photo']
+        premium_comptes = stats['premium']
     except Exception:
         total_comptes = new_comptes_30d = new_comptes_7d = verified_comptes = inactive_comptes = 0
+        new_comptes_today = online_comptes = with_photo_comptes = premium_comptes = 0
 
     deleted_comptes = 0
     try:
@@ -99,17 +111,13 @@ def index(request):
     except Exception:
         pass
 
-    chart_labels, chart_data = [], []
+    recent_comptes = []
     try:
-        comptes_par_jour = list(
-            Compte.objects.filter(created_at__gte=thirty_days_ago)
-            .annotate(date=TruncDate('created_at'))
-            .values('date')
-            .annotate(count=Count('id'))
-            .order_by('date')
+        recent_comptes = list(
+            Compte.objects.only('id', 'username', 'avatar', 'ville', 'created_at', 'is_verified', 'is_online')
+            .exclude(email__endswith='@meet-voice-test.fr')
+            .order_by('-created_at')[:8]
         )
-        chart_labels = [c['date'].strftime('%d/%m') for c in comptes_par_jour]
-        chart_data = [c['count'] for c in comptes_par_jour]
     except Exception:
         pass
 
@@ -146,11 +154,13 @@ def index(request):
         'total_comptes': total_comptes,
         'new_comptes_30d': new_comptes_30d,
         'new_comptes_7d': new_comptes_7d,
+        'new_comptes_today': new_comptes_today,
         'verified_comptes': verified_comptes,
         'inactive_comptes': inactive_comptes,
         'deleted_comptes': deleted_comptes,
-        'chart_labels': json.dumps(chart_labels),
-        'chart_data': json.dumps(chart_data),
+        'online_comptes': online_comptes,
+        'with_photo_comptes': with_photo_comptes,
+        'premium_comptes': premium_comptes,
         'total_likes': total_likes,
         'total_vues': total_vues,
         'total_photos': total_photos,
@@ -158,6 +168,7 @@ def index(request):
         'total_signalements': total_signalements,
         'mongo_status': mongo_status,
         'pg_ok': pg_ok,
+        'recent_comptes': recent_comptes,
     }
     cache.set('dashboard_index', context, 30)
     return render(request, 'dashboard/index.html', context)
@@ -169,8 +180,13 @@ def comptes_list(request):
     status_filter = request.GET.get('status', '')
     sort = request.GET.get('sort', '-created_at')
 
+    _comptes_cache_key = f'comptes_list_{search}_{status_filter}_{sort}'
+    cached = cache.get(_comptes_cache_key)
+    if cached:
+        return render(request, 'dashboard/comptes.html', cached)
+
     qs = Compte.objects.only(
-        'id', 'username', 'email', 'prenom', 'nom', 'ville',
+        'id', 'username', 'email', 'prenom', 'nom', 'ville', 'avatar',
         'abonnement', 'is_verified', 'is_active', 'is_online', 'created_at',
     ).exclude(email__endswith='@meet-voice-test.fr')
     if search:
@@ -222,6 +238,7 @@ def comptes_list(request):
         'chart_labels': json.dumps(chart_labels),
         'chart_data': json.dumps(chart_data),
     }
+    cache.set(_comptes_cache_key, context, 60)
     return render(request, 'dashboard/comptes.html', context)
 
 
@@ -295,6 +312,7 @@ def compte_toggle(request, pk, field):
     current = getattr(compte, field)
     setattr(compte, field, not current)
     compte.save(update_fields=[field])
+    cache.delete('dashboard_index')
     return JsonResponse({'ok': True, 'field': field, 'value': not current})
 
 
@@ -304,37 +322,47 @@ def compte_delete(request, pk):
     compte = get_object_or_404(Compte, pk=pk)
     username = compte.username
     compte.delete()
+    cache.delete('dashboard_index')
     django_messages.success(request, f"Compte '{username}' supprime.")
     return redirect('dashboard:comptes')
 
 
 @login_required
 def moderation(request):
-    nsfw_photos = Photo.objects.only(
+    cached = cache.get('moderation_view')
+    if cached:
+        return render(request, 'dashboard/moderation.html', cached)
+
+    nsfw_photos = list(Photo.objects.only(
         'id', 'compte_id', 'photos', 'type_photo', 'date_ajout', 'is_nsfw', 'is_shocking',
-    ).filter(is_nsfw=True).order_by('-date_ajout')[:50]
-    shocking_photos = Photo.objects.only(
+    ).filter(is_nsfw=True).order_by('-date_ajout')[:50])
+    shocking_photos = list(Photo.objects.only(
         'id', 'compte_id', 'photos', 'type_photo', 'date_ajout', 'is_nsfw', 'is_shocking',
-    ).filter(is_shocking=True).order_by('-date_ajout')[:50]
-    profile_comments = ProfileComment.objects.select_related('auteur', 'profil_utilisateur').only(
-        'id', 'contenu', 'date_creation', 'auteur__username', 'profil_utilisateur__username',
-    ).order_by('-date_creation')[:100]
-    photo_comments = PhotoComment.objects.select_related('auteur', 'photo').only(
-        'id', 'contenu', 'date_creation', 'auteur__username', 'photo__id',
-    ).order_by('-date_creation')[:100]
+    ).filter(is_shocking=True).order_by('-date_ajout')[:50])
+    profile_comments = list(ProfileComment.objects.select_related('auteur', 'profil_utilisateur').only(
+        'id', 'contenu', 'date_creation', 'signale', 'raison_signalement',
+        'auteur__username', 'auteur__avatar',
+        'profil_utilisateur__username', 'profil_utilisateur__avatar',
+    ).order_by('-date_creation')[:100])
+    photo_comments = list(PhotoComment.objects.select_related('auteur', 'photo').only(
+        'id', 'contenu', 'date_creation', 'signale', 'raison_signalement',
+        'auteur__username', 'auteur__avatar', 'photo__id',
+    ).order_by('-date_creation')[:100])
     try:
-        video_comments = VideoComment.objects.select_related('auteur', 'video').only(
-            'id', 'contenu', 'date_creation', 'auteur__username', 'video__id',
-        ).order_by('-date_creation')[:100]
+        video_comments = list(VideoComment.objects.select_related('auteur', 'video').only(
+            'id', 'contenu', 'date_creation', 'signale', 'raison_signalement',
+            'auteur__username', 'auteur__avatar',
+            'video__id', 'video__titre', 'video__thumbnail_url',
+        ).order_by('-date_creation')[:100])
     except Exception:
         video_comments = []
-    blacklist = CompteBlacklist.objects.select_related('bloqueur', 'bloque').only(
+    blacklist = list(CompteBlacklist.objects.select_related('bloqueur', 'bloque').only(
         'id', 'date_creation', 'bloqueur__username', 'bloque__username',
-    ).order_by('-date_creation')[:50]
-    signalements = SignalementUtilisateur.objects.select_related('signaleur', 'signale').only(
+    ).order_by('-date_creation')[:50])
+    signalements = list(SignalementUtilisateur.objects.select_related('signaleur', 'signale').only(
         'id', 'motif', 'description', 'date_creation', 'statut',
         'signaleur__username', 'signale__username',
-    ).order_by('-date_creation')[:50]
+    ).order_by('-date_creation')[:50])
 
     mongo_posts = []
     total_comments = 0
@@ -390,8 +418,8 @@ def moderation(request):
     try:
         gw_db = get_mongo_database('gateway')
         for msg in gw_db['messages'].find({}, {
-            'from': 1, 'to': 1, 'content': 1, 'timestamp': 1, 'type': 1,
-        }).sort('_id', -1).limit(200):
+            'from': 1, 'to': 1, 'message': 1, 'timestamp': 1, 'read': 1,
+        }).sort('_id', -1).limit(1000):
             msg['id'] = str(msg.pop('_id'))
             msg['timestamp'] = _parse_date(msg.get('timestamp'))
             mongo_messages.append(msg)
@@ -421,6 +449,7 @@ def moderation(request):
         'events_list': events_list,
         'event_comments_grouped': event_comments_grouped,
     }
+    cache.set('moderation_view', context, 60)
     return render(request, 'dashboard/moderation.html', context)
 
 
@@ -438,6 +467,7 @@ def photo_moderate(request, pk):
     elif action == 'reject':
         photo.est_active = False
         photo.save(update_fields=['est_active'])
+    cache.delete('moderation_view')
     return JsonResponse({'ok': True})
 
 
@@ -448,6 +478,7 @@ def mongo_post_delete(request, post_id):
         from bson import ObjectId
         db = get_mongo_database('api')
         db['posts'].delete_one({'_id': ObjectId(post_id)})
+        cache.delete('moderation_view')
         return JsonResponse({'ok': True})
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
@@ -463,6 +494,7 @@ def mongo_comment_delete(request, post_id, comment_id):
             {'_id': ObjectId(post_id)},
             {'$pull': {'comments': {'id': comment_id}}}
         )
+        cache.delete('moderation_view')
         return JsonResponse({'ok': True})
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
@@ -478,6 +510,7 @@ def mongo_reply_delete(request, post_id, comment_id, reply_id):
             {'_id': ObjectId(post_id), 'comments.id': comment_id},
             {'$pull': {'comments.$.replies': {'id': reply_id}}}
         )
+        cache.delete('moderation_view')
         return JsonResponse({'ok': True})
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
@@ -490,6 +523,40 @@ def mongo_message_delete(request, msg_id):
         from bson import ObjectId
         db = get_mongo_database('gateway')
         db['messages'].delete_one({'_id': ObjectId(msg_id)})
+        cache.delete('moderation_view')
+        return JsonResponse({'ok': True})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+
+@login_required
+@require_POST
+def profile_comment_delete(request, comment_id):
+    try:
+        ProfileComment.objects.filter(id=comment_id).delete()
+        cache.delete('moderation_view')
+        return JsonResponse({'ok': True})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+
+@login_required
+@require_POST
+def photo_comment_delete(request, comment_id):
+    try:
+        PhotoComment.objects.filter(id=comment_id).delete()
+        cache.delete('moderation_view')
+        return JsonResponse({'ok': True})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+
+@login_required
+@require_POST
+def video_comment_delete(request, comment_id):
+    try:
+        VideoComment.objects.filter(id=comment_id).delete()
+        cache.delete('moderation_view')
         return JsonResponse({'ok': True})
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
@@ -502,6 +569,7 @@ def event_comment_delete(request, comment_id):
         from bson import ObjectId
         db = get_mongo_database('event')
         db['comments'].delete_one({'_id': ObjectId(comment_id)})
+        cache.delete('moderation_view')
         return JsonResponse({'ok': True})
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
@@ -732,13 +800,25 @@ def plans_list(request):
             stats = get_stats()
             cache.set('mollie_stats', stats, 120)
         if tab in ('payments', 'overview'):
-            payments = list_payments()
+            payments = cache.get('mollie_payments')
+            if payments is None:
+                payments = list_payments()
+                cache.set('mollie_payments', payments, 120)
         if tab in ('customers', 'overview'):
-            customers = list_customers()
+            customers = cache.get('mollie_customers')
+            if customers is None:
+                customers = list_customers()
+                cache.set('mollie_customers', customers, 120)
         if tab in ('subscriptions', 'overview'):
-            subscriptions = list_all_subscriptions()
+            subscriptions = cache.get('mollie_subscriptions')
+            if subscriptions is None:
+                subscriptions = list_all_subscriptions()
+                cache.set('mollie_subscriptions', subscriptions, 120)
         if tab == 'refunds':
-            refunds = list_refunds()
+            refunds = cache.get('mollie_refunds')
+            if refunds is None:
+                refunds = list_refunds()
+                cache.set('mollie_refunds', refunds, 120)
     except Exception as e:
         error = str(e)
     context = {
@@ -756,8 +836,13 @@ def plans_list(request):
 @login_required
 def mollie_customer_detail(request, customer_id):
     from dashboard.mollie_helper import get_customer_detail
+    _cache_key = f'mollie_customer_{customer_id}'
+    _cached = cache.get(_cache_key)
+    if _cached is not None:
+        return JsonResponse(_cached)
     try:
         data = get_customer_detail(customer_id)
+        cache.set(_cache_key, data, 120)
     except Exception as e:
         data = {'error': str(e)}
     return JsonResponse(data)
@@ -790,8 +875,12 @@ def mollie_refund(request):
 
 @login_required
 def factures_list(request):
-    factures = PgFacture.objects.select_related('user').all().order_by('-date_emission')[:200]
+    cached = cache.get('factures_list')
+    if cached:
+        return render(request, 'dashboard/factures.html', cached)
+    factures = list(PgFacture.objects.select_related('user').all().order_by('-date_emission')[:200])
     context = {'factures': factures}
+    cache.set('factures_list', context, 120)
     return render(request, 'dashboard/factures.html', context)
 
 
@@ -856,10 +945,15 @@ def monitoring_api(request):
 
     results = {}
 
-    with ThreadPoolExecutor(max_workers=min(8, len(s.MONITORING_TARGETS))) as executor:
+    active_targets = {k: v for k, v in s.MONITORING_TARGETS.items() if v.get('local_port')}
+    for k, v in s.MONITORING_TARGETS.items():
+        if not v.get('local_port'):
+            results[k] = {'error': v.get('error', 'SSH tunnel not available')}
+
+    with ThreadPoolExecutor(max_workers=min(8, max(1, len(active_targets)))) as executor:
         futures = {
             executor.submit(_fetch_single_metric, key, info['local_port']): key
-            for key, info in s.MONITORING_TARGETS.items()
+            for key, info in active_targets.items()
         }
 
     fetched = {}
@@ -1100,6 +1194,10 @@ def _build_contabo_ip_map():
 
 @login_required
 def contabo_api(request):
+    _cached = cache.get('contabo_api')
+    if _cached is not None:
+        return JsonResponse(_cached)
+
     global _contabo_ip_map
     if _contabo_ip_map is None:
         _contabo_ip_map = _build_contabo_ip_map()
@@ -1152,7 +1250,9 @@ def contabo_api(request):
             'role': role,
         })
 
-    return JsonResponse({'instances': result})
+    data = {'instances': result}
+    cache.set('contabo_api', data, 120)
+    return JsonResponse(data)
 
 
 @login_required
@@ -1171,9 +1271,15 @@ def contabo_action(request):
 
 @login_required
 def contabo_snapshots_api(request, instance_id):
+    _cache_key = f'contabo_snapshots_{instance_id}'
+    _cached = cache.get(_cache_key)
+    if _cached is not None:
+        return JsonResponse(_cached)
     try:
         snaps = list_snapshots(int(instance_id))
-        return JsonResponse({'snapshots': snaps})
+        data = {'snapshots': snaps}
+        cache.set(_cache_key, data, 120)
+        return JsonResponse(data)
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
 
@@ -1210,6 +1316,9 @@ def contabo_reinstall(request):
 
 @login_required
 def contabo_images_api(request):
+    _cached = cache.get('contabo_images')
+    if _cached is not None:
+        return JsonResponse(_cached)
     try:
         images = list_images()
         result = []
@@ -1221,7 +1330,9 @@ def contabo_images_api(request):
                 'osType': img.get('osType', ''),
                 'version': img.get('version', ''),
             })
-        return JsonResponse({'images': result})
+        data = {'images': result}
+        cache.set('contabo_images', data, 300)
+        return JsonResponse(data)
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
 
@@ -1243,7 +1354,7 @@ def terminal_connect(request):
         result = connect(session_id, server_key, password=password)
         return JsonResponse(result)
     except Exception as e:
-        return JsonResponse({'error': str(e)}, status=400)
+        return JsonResponse({'error': str(e)}, status=200)
 
 
 @login_required
@@ -1424,6 +1535,9 @@ def newsletter_send(request):
 
 @login_required
 def newsletter_preview_recipients(request):
+    _cached = cache.get('newsletter_recipients')
+    if _cached is not None:
+        return JsonResponse(_cached)
     try:
         count = Compte.objects.filter(est_active=True).exclude(email__isnull=True).exclude(email='').count()
         sample = list(
@@ -1434,7 +1548,9 @@ def newsletter_preview_recipients(request):
     except Exception:
         count = 0
         sample = []
-    return JsonResponse({'count': count, 'sample': sample})
+    data = {'count': count, 'sample': sample}
+    cache.set('newsletter_recipients', data, 300)
+    return JsonResponse(data)
 
 
 @login_required
@@ -1539,9 +1655,10 @@ def user_tracking(request):
 def user_tracking_api(request):
     section = request.GET.get('section', 'all')
     days = int(request.GET.get('days', '30'))
+    funnel_days = int(request.GET.get('funnel_days', str(days)))
     exclude_admin = request.GET.get('exclude_admin', '1') == '1'
 
-    _cache_key = f'user_tracking_{section}_{days}_{int(exclude_admin)}'
+    _cache_key = f'user_tracking_{section}_{days}_{funnel_days}_{int(exclude_admin)}'
     _cached = cache.get(_cache_key)
     if _cached is not None:
         return JsonResponse(_cached)
@@ -1722,6 +1839,63 @@ def user_tracking_api(request):
                     r['last_login'] = r['last_login'].strftime('%Y-%m-%d %H:%M')
             result['recent'] = recent
 
+        def _build_funnel(now, f_days):
+            from django.db import connections
+            _cursor = connections['default'].cursor()
+            step_labels = [
+                (1, 'Choix du type (Amour/Amitié/Libertin)'),
+                (2, 'Question : Sexe'),
+                (3, 'Question : Âge'),
+                (4, 'CGU + Localisation GPS'),
+                (5, 'Question : Pseudo'),
+                (6, 'Question : Photo'),
+                (7, 'Email + Vérification'),
+            ]
+            if f_days > 0:
+                funnel_since = now - timedelta(days=f_days)
+                _cursor.execute(
+                    "SELECT step, COUNT(DISTINCT session_id) FROM tracking_user_event "
+                    "WHERE event_type='registration_step' AND created_at >= %s "
+                    "GROUP BY step ORDER BY step",
+                    [funnel_since]
+                )
+                step_counts = {r[0]: r[1] for r in _cursor.fetchall()}
+                _cursor.execute(
+                    "SELECT COUNT(*) FROM compte_compte WHERE created_at >= %s AND email NOT LIKE '%%@meet-voice-test.fr'",
+                    [funnel_since]
+                )
+            else:
+                _cursor.execute(
+                    "SELECT step, COUNT(DISTINCT session_id) FROM tracking_user_event "
+                    "WHERE event_type='registration_step' "
+                    "GROUP BY step ORDER BY step"
+                )
+                step_counts = {r[0]: r[1] for r in _cursor.fetchall()}
+                _cursor.execute(
+                    "SELECT COUNT(*) FROM compte_compte WHERE email NOT LIKE '%%@meet-voice-test.fr'"
+                )
+            created_count = _cursor.fetchone()[0]
+            first_step_count = step_counts.get(1, 0) or 1
+            funnel = []
+            for step_num, label in step_labels:
+                c = step_counts.get(step_num, 0)
+                funnel.append({
+                    'step': label,
+                    'count': c,
+                    'pct': round(c / first_step_count * 100, 1) if first_step_count else 0,
+                })
+            funnel.append({
+                'step': 'Compte créé ✓',
+                'count': created_count,
+                'pct': round(created_count / first_step_count * 100, 1) if first_step_count else 0,
+            })
+            return funnel
+
+        if section == 'funnel':
+            result['anon_funnel'] = _build_funnel(now, funnel_days)
+            cache.set(_cache_key, result, 300)
+            return JsonResponse(result)
+
         if section in ('all', 'site'):
             _flush_pageviews()
             all_pv = PageView.objects.filter(created_at__gte=since)
@@ -1729,9 +1903,12 @@ def user_tracking_api(request):
             raw_anon_qs = all_pv.filter(user_id='')
             auth_qs = all_pv.exclude(user_id='')
 
+            all_registered_ips = set(
+                PageView.objects.exclude(user_id='').values_list('ip_address', flat=True).distinct()
+            )
             registered_ips = set(
                 auth_qs.values_list('ip_address', flat=True).distinct()
-            )
+            ) | all_registered_ips
             ip_to_user = {}
             for row in auth_qs.values('ip_address', 'user_id', 'username').distinct():
                 ip_to_user[row['ip_address']] = {
@@ -1786,46 +1963,7 @@ def user_tracking_api(request):
                     .order_by('hour')
                 )
 
-            from django.db import connections
-            _cursor = connections['default'].cursor()
-            step_labels = [
-                (1, 'Choix du type (Amour/Amitié/Libertin)'),
-                (2, 'Question : Sexe'),
-                (3, 'Question : Âge'),
-                (4, 'CGU + Localisation GPS'),
-                (5, 'Question : Pseudo'),
-                (6, 'Question : Photo'),
-                (7, 'Email + Vérification'),
-            ]
-            _cursor.execute(
-                "SELECT step, COUNT(DISTINCT session_id) FROM tracking_user_event "
-                "WHERE event_type='registration_step' AND created_at >= %s "
-                "GROUP BY step ORDER BY step",
-                [since]
-            )
-            step_counts = {r[0]: r[1] for r in _cursor.fetchall()}
-
-            _cursor.execute(
-                "SELECT COUNT(*) FROM compte_compte WHERE created_at >= %s AND email NOT LIKE '%%@meet-voice-test.fr'",
-                [since]
-            )
-            created_count = _cursor.fetchone()[0]
-
-            first_step_count = step_counts.get(1, 0) or 1
-            anon_funnel = []
-            for step_num, label in step_labels:
-                c = step_counts.get(step_num, 0)
-                anon_funnel.append({
-                    'step': label,
-                    'count': c,
-                    'pct': round(c / first_step_count * 100, 1) if first_step_count else 0,
-                })
-            anon_funnel.append({
-                'step': 'Compte créé ✓',
-                'count': created_count,
-                'pct': round(created_count / first_step_count * 100, 1) if first_step_count else 0,
-            })
-            result['anon_funnel'] = anon_funnel
+            result['anon_funnel'] = _build_funnel(now, funnel_days)
 
             anon_ip_rows = list(
                 anon_qs.values('ip_address')
