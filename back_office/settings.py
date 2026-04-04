@@ -194,14 +194,14 @@ _NE_SERVERS = [
     ('mongo_reseaux', 'MongoDB Reseaux Sociaux', '164.68.115.49', 'root'),
     ('mongo_evenement', 'MongoDB Evenement', '45.84.138.48', 'root'),
     ('evenement', 'Evenement', '2.58.82.237', 'root'),
-    ('ia', 'IA', '185.193.66.99', 'root'),
+    ('speed_dating', 'Speed Dating', '185.193.66.99', 'root'),
     ('automatisation', 'Automatisation', '149.102.143.243', 'root'),
     ('article', 'Article', '149.102.138.98', 'root'),
     ('reseaux_sociaux', 'Reseaux Sociaux', '62.171.154.23', 'root'),
     ('messagerie', 'Messagerie', '62.171.162.229', 'root'),
     ('websocket', 'WebSocket', '167.86.82.111', 'sulta'),
     ('gateway', 'Gateway', '89.117.49.9', 'root'),
-    ('speed_dating', 'Speed Dating', '144.91.110.197', 'root'),
+    ('simulation', 'Simulation', '144.91.110.197', 'root'),
 ]
 
 MONITORING_TARGETS = {}
