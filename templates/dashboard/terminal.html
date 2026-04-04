@@ -63,20 +63,6 @@
     .ai-actions .btn-exec:hover { background: rgba(0,210,91,.15); }
     .ai-actions .btn-skip { color: #636e72; border-color: #636e72; }
     .ai-actions .btn-skip:hover { background: rgba(99,110,114,.15); }
-    .ansible-section { margin-top: .5rem; padding-top: .5rem; border-top: 1px solid #2a2a35; }
-    .ansible-btn {
-        display: block; width: 100%; text-align: left; padding: .4rem .8rem;
-        background: #12121a; border: 1px solid #2a2a35; border-radius: 6px;
-        color: #8a8a9a; font-size: .75rem; cursor: pointer; margin-bottom: .3rem;
-        transition: all .15s;
-    }
-    .ansible-btn:hover { border-color: #00b4d8; color: #fff; }
-    .ansible-btn.active-view { border-color: #00b4d8; color: #00b4d8; background: rgba(0,180,216,.05); }
-    .ansible-btn i { margin-right: .3rem; }
-    .semaphore-frame {
-        width: 100%; border: 1px solid #2a2a35; border-radius: 12px;
-        background: #0f0f13; height: 100%;
-    }
 </style>
 {% endblock %}
 
@@ -90,16 +76,10 @@
             <span class="srv-host">{{ srv.user }}@{{ srv.host }}</span>
         </button>
         {% endfor %}
-        <div class="ansible-section">
-            <div class="small text-muted mb-1"><i class="bi bi-gear-wide-connected"></i> Ansible</div>
-            <button class="ansible-btn" onclick="showSemaphore()" id="ansible-btn-semaphore-ui">
-                <i class="bi bi-ui-checks-grid"></i> Semaphore UI
-            </button>
-        </div>
     </div>
 
     <div class="term-main">
-        <div class="terminal-box" id="terminal-panel">
+        <div class="terminal-box">
             <div class="term-header">
                 <span class="term-title" id="term-title">Aucun serveur sélectionné</span>
                 <div class="d-flex gap-2 align-items-center">
@@ -135,7 +115,6 @@
                 <input type="text" class="term-input" id="term-input" placeholder="Tapez une commande..." autofocus>
             </div>
         </div>
-        <iframe id="semaphore-panel" class="semaphore-frame" src="" frameborder="0" style="display: none;"></iframe>
     </div>
 </div>
 {% endblock %}
@@ -176,7 +155,7 @@ function toggleAiMode() {
     input.focus();
 }
 
-function _selectServer(key) {
+function selectServer(key) {
     document.querySelectorAll('.srv-btn').forEach(b => {
         if (!b.classList.contains('connected')) b.style.borderColor = '#2a2a35';
     });
@@ -520,28 +499,5 @@ window.addEventListener('beforeunload', function() {
         navigator.sendBeacon("{% url 'dashboard:terminal_disconnect' %}", new URLSearchParams({server_key: currentServer, csrfmiddlewaretoken: csrfToken}));
     }
 });
-
-let semaphoreVisible = false;
-function showSemaphore() {
-    const termPanel = document.getElementById('terminal-panel');
-    const semPanel = document.getElementById('semaphore-panel');
-    const btn = document.getElementById('ansible-btn-semaphore-ui');
-    semaphoreVisible = !semaphoreVisible;
-    if (semaphoreVisible) {
-        termPanel.style.display = 'none';
-        semPanel.style.display = 'block';
-        if (!semPanel.src || semPanel.src === location.href) semPanel.src = '/semaphore/';
-        btn.classList.add('active-view');
-    } else {
-        termPanel.style.display = 'flex';
-        semPanel.style.display = 'none';
-        btn.classList.remove('active-view');
-    }
-}
-
-function selectServer(key) {
-    if (semaphoreVisible) showSemaphore();
-    _selectServer(key);
-}
 </script>
 {% endblock %}

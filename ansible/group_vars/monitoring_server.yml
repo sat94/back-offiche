@@ -1,2 +1,0 @@
-# Exception pour le serveur de monitoring afin de ne pas se couper l'accès root
-ssh_permit_root_login: "yes"

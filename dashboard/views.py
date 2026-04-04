@@ -1,5 +1,4 @@
 import json
-import os
 import subprocess
 import sys
 import time
@@ -1089,70 +1088,6 @@ def monitoring_api(request):
             results[key] = {'error': str(e)}
 
     return JsonResponse(results)
-
-
-MONITORING_SERVICES = ['grafana-server', 'prometheus', 'loki', 'alertmanager', 'semaphore', 'node_exporter']
-MONITORING_SERVICE_NAMES = {
-    'grafana-server': 'grafana',
-    'prometheus': 'prometheus',
-    'loki': 'loki',
-    'alertmanager': 'alertmanager',
-    'semaphore': 'semaphore',
-    'node_exporter': 'node_exporter',
-}
-
-
-@login_required
-def monitoring_services_api(request):
-    result = {}
-    for svc in MONITORING_SERVICES:
-        try:
-            out = subprocess.run(
-                ['systemctl', 'is-active', svc],
-                capture_output=True, text=True, timeout=5
-            )
-            active = out.stdout.strip() == 'active'
-        except Exception:
-            active = False
-        result[MONITORING_SERVICE_NAMES[svc]] = {'active': active}
-    return JsonResponse(result)
-
-
-@login_required
-def ansible_roles(request):
-    import os
-    roles_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'ansible', 'roles')
-    roles = []
-    if os.path.isdir(roles_dir):
-        for name in sorted(os.listdir(roles_dir)):
-            if os.path.isdir(os.path.join(roles_dir, name)):
-                roles.append(name)
-    return JsonResponse({'roles': roles})
-
-
-@login_required
-@require_POST
-def ansible_run(request):
-    body = json.loads(request.body)
-    tags = body.get('tags', '')
-    ansible_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'ansible')
-
-    cmd = ['ansible-playbook', '-i', 'inventory/hosts.yml', 'site.yml']
-    if tags:
-        cmd += ['--tags', tags]
-
-    try:
-        proc = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=300, cwd=ansible_dir
-        )
-        return JsonResponse({
-            'output': proc.stdout + proc.stderr,
-            'returncode': proc.returncode,
-        })
-    except subprocess.TimeoutExpired:
-        return JsonResponse({'error': 'Timeout (5min)', 'output': ''}, status=500)
-    except Exception as e:
-        return JsonResponse({'error': str(e), 'output': ''}, status=500)
 
 
 @login_required
